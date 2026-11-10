@@ -1,0 +1,45 @@
+name: Supabase Keep-Alive Ping
+
+on:
+  schedule:
+    # Runs every 5 days at 06:00 UTC to prevent Supabase Free Tier 7-day hibernation (AUD-08)
+    - cron: '0 6 */5 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  keepalive:
+    name: Ping Supabase (SELECT 1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Execute keep-alive ping against Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${SUPABASE_DB_URL:-}" ]; then
+            echo "Executing SELECT 1 via psql..."
+            psql "${SUPABASE_DB_URL}" -v ON_ERROR_STOP=1 -c "SELECT 1 AS keepalive_ok;"
+          elif [ -n "${SUPABASE_URL:-}" ] && [ -n "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "Executing keepalive_ping() RPC via PostgREST..."
+            HTTP_STATUS=$(curl -sS -o /tmp/keepalive_resp.json -w "%{http_code}" \
+              -X POST "${SUPABASE_URL%/}/rest/v1/rpc/keepalive_ping" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              -H "Content-Type: application/json" \
+              -d '{}')
+            if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+              echo "Keep-alive RPC failed with HTTP status ${HTTP_STATUS}"
+              exit 1
+            fi
+            echo "Keep-alive RPC succeeded (HTTP ${HTTP_STATUS})."
+          else
+            echo "Error: Configure SUPABASE_DB_URL or (SUPABASE_URL + SUPABASE_ANON_KEY) in GitHub Actions Secrets."
+            exit 1
+          fi
