@@ -148,6 +148,16 @@ export function createAppSupabaseClient(
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
     'public-anon-placeholder-key';
 
+  if (
+    url === 'https://placeholder.supabase.co' &&
+    typeof __DEV__ !== 'undefined' &&
+    __DEV__
+  ) {
+    console.warn(
+      '[SupabaseClient] ATENÇÃO: EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY não estão configuradas no ambiente. Crie um arquivo .env na raiz do projeto ou configure no EAS.',
+    );
+  }
+
   assertAnonClientKey(anonKey);
 
   const storage = createSecureStoreAuthStorage(config.storageBackend);

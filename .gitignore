@@ -31,7 +31,16 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# builds & packages
+*.apk
+*.aab
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
 
 # typescript
 *.tsbuildinfo
