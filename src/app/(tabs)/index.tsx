@@ -23,6 +23,7 @@ import {
   type HouseholdMemberRow,
   subscribeToDatabaseChanges,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import {
@@ -67,6 +68,7 @@ export default function DashboardScreen({
 }: DashboardScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
@@ -79,6 +81,12 @@ export default function DashboardScreen({
   const currentUserId = propCurrentUserId ?? sessionUserId;
 
   const [dbRevision, setDbRevision] = useState(0);
+
+  useEffect(() => {
+    if (db && householdId) {
+      syncHouseholdMembers(db, householdId).catch(() => {});
+    }
+  }, [db, householdId]);
 
   useEffect(() => {
     const unsubscribe = subscribeToDatabaseChanges(() => {
@@ -163,6 +171,29 @@ export default function DashboardScreen({
       )
       .all();
   }, [db, householdId, dbRevision]);
+
+  const effectiveMembers = useMemo(() => {
+    if (memberRows && memberRows.length > 0) {
+      return memberRows;
+    }
+    if (sessionUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: householdId ?? '',
+          userId: sessionUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.surface }]}>
@@ -377,7 +408,7 @@ export default function DashboardScreen({
         currentUserId={currentUserId}
         accounts={accountRows}
         categories={categoryRows}
-        members={memberRows}
+        members={effectiveMembers}
       />
     </View>
   );

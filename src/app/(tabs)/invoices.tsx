@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import type { InvoiceStatus } from '@/core';
+import { CurrencyInput } from '@/components/CurrencyInput';
+import { DatePickerInput } from '@/components/DatePickerInput';
 import { InstallmentEditor } from '@/components/InstallmentEditor';
 import {
   accounts,
@@ -34,7 +36,6 @@ import {
 } from '@/data';
 import {
   formatCentsToBrl,
-  parseCurrencyInputToCents,
   useFiltersStore,
   useSessionUIStore,
 } from '@/store';
@@ -78,7 +79,7 @@ export default function InvoicesScreen({
   const [payingInvoice, setPayingInvoice] =
     useState<InvoiceWithSummary | null>(null);
   const [paymentMode, setPaymentMode] = useState<'FULL' | 'PARTIAL'>('FULL');
-  const [partialAmountInput, setPartialAmountInput] = useState('');
+  const [partialAmountCents, setPartialAmountCents] = useState<number>(0);
   const [paymentAccountId, setPaymentAccountId] = useState<string | null>(null);
   const [paymentDate, setPaymentDate] = useState(`${competenceMonth}-17`);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -272,7 +273,7 @@ export default function InvoicesScreen({
   const openPaymentModal = (item: InvoiceWithSummary) => {
     setPayingInvoice(item);
     setPaymentMode('FULL');
-    setPartialAmountInput('');
+    setPartialAmountCents(0);
     setPaymentAccountId(
       item.card?.defaultPaymentAccountId ?? activeAccounts[0]?.id ?? null,
     );
@@ -303,16 +304,11 @@ export default function InvoicesScreen({
 
     let amountToPay: number | undefined;
     if (paymentMode === 'PARTIAL') {
-      try {
-        amountToPay = parseCurrencyInputToCents(partialAmountInput);
-      } catch {
-        setPaymentError('Valor parcial inválido.');
-        return;
-      }
-      if (amountToPay <= 0) {
+      if (partialAmountCents <= 0) {
         setPaymentError('O valor parcial deve ser maior que R$ 0,00.');
         return;
       }
+      amountToPay = partialAmountCents;
     }
 
     try {
@@ -671,26 +667,21 @@ export default function InvoicesScreen({
               {paymentMode === 'PARTIAL' ? (
                 <>
                   <Text style={styles.label}>Valor Parcial (R$)</Text>
-                  <TextInput
+                  <CurrencyInput
                     testID="payment-partial-amount-input"
                     style={styles.input}
-                    value={partialAmountInput}
-                    onChangeText={setPartialAmountInput}
-                    placeholder="Ex.: 200,00"
-                    placeholderTextColor="#64748B"
-                    keyboardType="decimal-pad"
+                    valueCents={partialAmountCents}
+                    onChangeCents={setPartialAmountCents}
+                    placeholder="R$ 0,00"
                   />
                 </>
               ) : null}
 
-              <Text style={styles.label}>Data do Pagamento (AAAA-MM-DD)</Text>
-              <TextInput
+              <DatePickerInput
                 testID="payment-date-input"
-                style={styles.input}
+                label="Data do Pagamento"
                 value={paymentDate}
-                onChangeText={setPaymentDate}
-                placeholder="2026-12-05"
-                placeholderTextColor="#64748B"
+                onChange={setPaymentDate}
               />
 
               <Text style={styles.label}>Conta Bancária Pagadora</Text>

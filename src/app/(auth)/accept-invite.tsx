@@ -11,6 +11,8 @@ import {
   View,
 } from 'react-native';
 import { acceptPartnerInviteCode } from '@/auth/onboardingService';
+import { getActiveDatabase, openEncryptedDatabase } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 
 export default function AcceptInviteScreen() {
   const router = useRouter();
@@ -23,10 +25,18 @@ export default function AcceptInviteScreen() {
     setErrorMessage(null);
     setLoading(true);
     try {
+      try {
+        await openEncryptedDatabase();
+      } catch (dbErr) {
+        console.warn('Database open error during accept invite:', dbErr);
+      }
+      const targetDb = getActiveDatabase();
       await acceptPartnerInviteCode({
         inviteCode,
         displayName,
+        db: targetDb,
       });
+      void syncHouseholdMembers(targetDb);
       router.replace('/');
     } catch (err) {
       setErrorMessage(

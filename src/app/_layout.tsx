@@ -13,6 +13,8 @@ import {
   promptBiometricUnlock,
 } from '@/auth/biometricGuard';
 import { restoreSessionOnLaunch } from '@/auth/onboardingService';
+import { openEncryptedDatabase } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import { useSessionUIStore } from '@/store/sessionUI';
 
 export default function RootLayout() {
@@ -39,8 +41,16 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
     restoreSessionOnLaunch()
-      .then((res) => {
+      .then(async (res) => {
         if (mounted && res.authenticated) {
+          try {
+            await openEncryptedDatabase();
+            if (res.householdId) {
+              void syncHouseholdMembers();
+            }
+          } catch (e) {
+            console.warn('Database initialization on launch:', e);
+          }
           void triggerUnlock();
         }
       })

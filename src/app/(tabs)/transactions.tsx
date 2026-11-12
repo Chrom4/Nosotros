@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { and, desc, eq, isNull } from 'drizzle-orm';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   calculateMonthlySummaryCents,
@@ -19,6 +19,7 @@ import {
   transactions,
   useReactiveQuery,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
   useFiltersStore,
@@ -38,6 +39,7 @@ export default function TransactionsScreen({
 }: TransactionsScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
@@ -105,6 +107,12 @@ export default function TransactionsScreen({
     ['categories'],
   );
 
+  useEffect(() => {
+    if (db && householdId) {
+      void syncHouseholdMembers(db, householdId);
+    }
+  }, [db, householdId]);
+
   const { data: memberRows } = useReactiveQuery(
     () =>
       db && householdId
@@ -120,6 +128,29 @@ export default function TransactionsScreen({
         : null,
     [db, householdId],
   );
+
+  const effectiveMembers = useMemo(() => {
+    if (memberRows && memberRows.length > 0) {
+      return memberRows;
+    }
+    if (sessionUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: householdId ?? '',
+          userId: sessionUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
 
   const filteredTransactions = useMemo(
     () =>
@@ -279,7 +310,7 @@ export default function TransactionsScreen({
             { mode: 'DOMESTIC' },
             'transactions-filter-DOMESTIC',
           )}
-          {memberRows.map((m) =>
+          {effectiveMembers.map((m) =>
             renderFilterChip(
               m.displayName,
               { mode: 'USER', userId: m.userId },
@@ -384,7 +415,7 @@ export default function TransactionsScreen({
         currentUserId={currentUserId}
         accounts={accountRows}
         categories={categoryRows}
-        members={memberRows}
+        members={effectiveMembers}
       />
     </View>
   );

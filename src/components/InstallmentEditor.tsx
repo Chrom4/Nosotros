@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +10,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { CurrencyInput } from './CurrencyInput';
+import { DatePickerInput } from './DatePickerInput';
+import { parseFriendlyDateToIso } from './TransactionQuickModal';
 import {
   resolveInvoiceCompetenceMonth,
   splitInstallments,
@@ -80,10 +85,34 @@ export function InstallmentEditor({
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
   const effectiveHouseholdId = propHouseholdId ?? sessionHouseholdId;
   const effectiveUserId =
     propCurrentUserId ?? sessionUserId ?? members[0]?.userId ?? null;
+
+  const effectiveMembers = useMemo(() => {
+    if (members && members.length > 0) {
+      return members;
+    }
+    if (effectiveUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: effectiveHouseholdId ?? '',
+          userId: effectiveUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [members, effectiveUserId, effectiveHouseholdId, sessionUserEmail]);
 
   const [mode, setMode] = useState<InstallmentEditorMode>(initialMode);
   const [editScope, setEditScope] = useState<InstallmentEditScope>('SCOPE_B');
@@ -104,15 +133,46 @@ export function InstallmentEditor({
         ? targetPlan.plan.ownerUserId
         : null,
   );
-  const [amountInput, setAmountInput] = useState('');
+  const [amountCents, setAmountCents] = useState(0);
   const [installmentsInput, setInstallmentsInput] = useState('3');
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const yesterdayIso = useMemo(
+    () => new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    [],
+  );
   const [purchaseDate, setPurchaseDate] = useState(
-    defaultDateIso ?? `${competenceMonth}-05`,
+    defaultDateIso ??
+      (todayIso.startsWith(competenceMonth)
+        ? todayIso
+        : `${competenceMonth}-01`),
   );
   const [description, setDescription] = useState(
     targetPlan?.plan.description ?? '',
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (visible) {
+      setMode(initialMode);
+      if (initialCardId) {
+        setCreditCardId(initialCardId);
+      }
+      if (initialMode === 'CREATE_PURCHASE') {
+        setInstallmentsInput('1');
+      } else if (initialMode === 'CREATE_INSTALLMENT') {
+        setInstallmentsInput('3');
+      }
+      setAmountCents(0);
+      setErrorMessage(null);
+      const currentToday = new Date().toISOString().slice(0, 10);
+      setPurchaseDate(
+        defaultDateIso ??
+          (currentToday.startsWith(competenceMonth)
+            ? currentToday
+            : `${competenceMonth}-01`),
+      );
+    }
+  }, [visible, initialMode, initialCardId, competenceMonth, defaultDateIso]);
 
   const activeMode: InstallmentEditorMode = targetPlan
     ? 'EDIT_INSTALLMENT'
@@ -162,7 +222,7 @@ export function InstallmentEditor({
       return null;
     }
     try {
-      const totalCents = parseCurrencyInputToCents(amountInput);
+      const totalCents = amountCents;
       const count = Number(installmentsInput.trim());
       if (totalCents <= 0 || !Number.isInteger(count) || count < 2 || count > 240) {
         return null;
@@ -175,7 +235,7 @@ export function InstallmentEditor({
     } catch {
       return null;
     }
-  }, [activeMode, selectedCard, amountInput, installmentsInput, purchaseDate]);
+  }, [activeMode, selectedCard, amountCents, installmentsInput, purchaseDate]);
 
   const targetSliceItem = useMemo(() => {
     if (!targetPlan) return null;
@@ -209,14 +269,6 @@ export function InstallmentEditor({
     }
     if (!effectiveHouseholdId || !effectiveUserId) {
       setErrorMessage('Sessão do casal não identificada.');
-      return;
-    }
-
-    let amountCents = 0;
-    try {
-      amountCents = parseCurrencyInputToCents(amountInput);
-    } catch {
-      setErrorMessage('Informe um valor monetário válido em R$.');
       return;
     }
 
@@ -274,6 +326,11 @@ export function InstallmentEditor({
         return;
       }
 
+      const finalPurchaseDate = parseFriendlyDateToIso(
+        purchaseDate,
+        competenceMonth,
+      );
+
       if (activeMode === 'CREATE_PURCHASE') {
         createCreditCardPurchase(targetDb, {
           householdId: effectiveHouseholdId,
@@ -282,7 +339,7 @@ export function InstallmentEditor({
           creditCardId: effectiveCardId,
           categoryId: effectiveCategoryId,
           amountCents,
-          transactionDate: purchaseDate.trim(),
+          transactionDate: finalPurchaseDate,
           description: description.trim(),
         });
       } else if (activeMode === 'CREATE_REFUND') {
@@ -293,7 +350,7 @@ export function InstallmentEditor({
           creditCardId: effectiveCardId,
           categoryId: effectiveCategoryId,
           amountCents,
-          transactionDate: purchaseDate.trim(),
+          transactionDate: finalPurchaseDate,
           description: description.trim(),
         });
       } else {
@@ -319,12 +376,12 @@ export function InstallmentEditor({
             description: description.trim(),
             totalAmountCents: amountCents,
             totalInstallments,
-            purchaseDate: purchaseDate.trim(),
+            purchaseDate: finalPurchaseDate,
           },
         });
       }
 
-      setAmountInput('');
+      setAmountCents(0);
       setDescription('');
       onSuccess?.();
       handleClose();
@@ -364,26 +421,31 @@ export function InstallmentEditor({
       onRequestClose={handleClose}
     >
       <View style={styles.backdrop} testID="installment-editor-modal">
-        <View style={styles.sheet}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>
-              {activeMode === 'EDIT_INSTALLMENT'
-                ? 'Editar Parcelamento (Escopo A / B)'
-                : 'Lançamento no Cartão de Crédito'}
-            </Text>
-            <Pressable
-              testID="installment-editor-close"
-              onPress={handleClose}
-              style={styles.closeBtn}
-            >
-              <Text style={styles.closeBtnText}>Fechar</Text>
-            </Pressable>
-          </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.sheet}>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>
+                {activeMode === 'EDIT_INSTALLMENT'
+                  ? 'Editar Parcelamento (Escopo A / B)'
+                  : 'Lançamento no Cartão de Crédito'}
+              </Text>
+              <Pressable
+                testID="installment-editor-close"
+                onPress={handleClose}
+                style={styles.closeBtn}
+              >
+                <Text style={styles.closeBtnText}>Fechar</Text>
+              </Pressable>
+            </View>
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
             {errorMessage ? (
               <View
                 style={styles.errorBanner}
@@ -548,14 +610,12 @@ export function InstallmentEditor({
                       ? 'Novo Valor da Parcela (R$)'
                       : 'Valor (R$)'}
                 </Text>
-                <TextInput
+                <CurrencyInput
                   testID="installment-amount-input"
                   style={styles.input}
-                  value={amountInput}
-                  onChangeText={setAmountInput}
-                  placeholder="Ex.: 100,00"
-                  placeholderTextColor="#64748B"
-                  keyboardType="decimal-pad"
+                  valueCents={amountCents}
+                  onChangeCents={setAmountCents}
+                  placeholder="R$ 0,00"
                 />
               </View>
 
@@ -605,17 +665,12 @@ export function InstallmentEditor({
             />
 
             {activeMode !== 'EDIT_INSTALLMENT' ? (
-              <>
-                <Text style={styles.label}>Data da Compra (AAAA-MM-DD)</Text>
-                <TextInput
-                  testID="installment-date-input"
-                  style={styles.input}
-                  value={purchaseDate}
-                  onChangeText={setPurchaseDate}
-                  placeholder="2026-11-05"
-                  placeholderTextColor="#64748B"
-                />
-              </>
+              <DatePickerInput
+                testID="installment-date-input"
+                label="Data da Compra"
+                value={purchaseDate}
+                onChange={setPurchaseDate}
+              />
             ) : null}
 
             {/* Titularidade (Casa vs Membro) */}
@@ -635,11 +690,12 @@ export function InstallmentEditor({
                     ownerUserId === null && styles.pillTextActive,
                   ]}
                 >
-                  Casa (Compartilhado)
+                  Casa (Conjunta)
                 </Text>
               </Pressable>
-              {members.map((m) => {
+              {effectiveMembers.map((m) => {
                 const active = ownerUserId === m.userId;
+                const isMe = m.userId === sessionUserId;
                 return (
                   <Pressable
                     key={m.id}
@@ -653,7 +709,7 @@ export function InstallmentEditor({
                         active && styles.pillTextActive,
                       ]}
                     >
-                      {m.displayName}
+                      Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
                     </Text>
                   </Pressable>
                 );
@@ -710,6 +766,7 @@ export function InstallmentEditor({
             ) : null}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -721,12 +778,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.82)',
     justifyContent: 'flex-end',
   },
+  keyboardContainer: {
+    width: '100%',
+    maxHeight: '92%',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
   sheet: {
     backgroundColor: '#1E293B',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '92%',
+    maxHeight: '100%',
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -787,6 +851,38 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     marginBottom: 6,
     marginTop: 8,
+  },
+  labelRowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dateQuickChip: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  dateQuickChipActive: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#312E81',
+  },
+  dateQuickChipText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  dateQuickChipTextActive: {
+    color: '#E0E7FF',
+    fontWeight: '700',
   },
   input: {
     backgroundColor: '#0F172A',

@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { and, eq, isNull } from 'drizzle-orm';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { CurrencyInput } from '@/components/CurrencyInput';
 import type { OwnershipFilter } from '@/core';
 import {
   InstallmentEditor,
@@ -33,6 +34,7 @@ import {
   updateCreditCard,
   useReactiveQuery,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
   parseCurrencyInputToCents,
@@ -53,6 +55,7 @@ export default function CardsScreen({
 }: CardsScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
 
@@ -162,6 +165,12 @@ export default function CardsScreen({
     ['categories'],
   );
 
+  useEffect(() => {
+    if (db && householdId) {
+      void syncHouseholdMembers(db, householdId);
+    }
+  }, [db, householdId]);
+
   const { data: memberRows } = useReactiveQuery(
     () =>
       db && householdId
@@ -177,6 +186,29 @@ export default function CardsScreen({
         : null,
     [db, householdId],
   );
+
+  const effectiveMembers = useMemo(() => {
+    if (memberRows && memberRows.length > 0) {
+      return memberRows;
+    }
+    if (sessionUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: householdId ?? '',
+          userId: sessionUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
 
   const cardsWithLimits = useMemo(
     () =>
@@ -218,7 +250,7 @@ export default function CardsScreen({
 
   const [editingCard, setEditingCard] = useState<CreditCardRow | null>(null);
   const [name, setName] = useState('');
-  const [limitInput, setLimitInput] = useState('5000,00');
+  const [limitCents, setLimitCents] = useState(500000);
   const [closingDayInput, setClosingDayInput] = useState('10');
   const [dueDayInput, setDueDayInput] = useState('17');
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
@@ -247,7 +279,7 @@ export default function CardsScreen({
   const resetForm = () => {
     setEditingCard(null);
     setName('');
-    setLimitInput('5000,00');
+    setLimitCents(500000);
     setClosingDayInput('10');
     setDueDayInput('17');
     setOwnerUserId(null);
@@ -258,9 +290,7 @@ export default function CardsScreen({
   const handleEditSelect = (card: CreditCardRow) => {
     setEditingCard(card);
     setName(card.name);
-    setLimitInput(
-      `${Math.floor(card.limitCents / 100)},${String(Math.abs(card.limitCents % 100)).padStart(2, '0')}`,
-    );
+    setLimitCents(card.limitCents);
     setClosingDayInput(String(card.closingDay));
     setDueDayInput(String(card.dueDay));
     setOwnerUserId(card.ownerUserId);
@@ -284,14 +314,6 @@ export default function CardsScreen({
       setErrorMessage(
         'Cadastre ao menos uma conta bancária antes de criar um cartão.',
       );
-      return;
-    }
-
-    let limitCents = 0;
-    try {
-      limitCents = parseCurrencyInputToCents(limitInput);
-    } catch {
-      setErrorMessage('Limite inválido.');
       return;
     }
 
@@ -434,7 +456,7 @@ export default function CardsScreen({
             { mode: 'DOMESTIC' },
             'cards-filter-DOMESTIC',
           )}
-          {memberRows.map((m) =>
+          {effectiveMembers.map((m) =>
             renderFilterChip(
               m.displayName,
               { mode: 'USER', userId: m.userId },
@@ -489,14 +511,12 @@ export default function CardsScreen({
             placeholder="Nome (ex.: Nubank Ultravioleta)"
             placeholderTextColor="#64748B"
           />
-          <TextInput
+          <CurrencyInput
             testID="card-limit-input"
             style={[styles.input, { flex: 1 }]}
-            value={limitInput}
-            onChangeText={setLimitInput}
+            valueCents={limitCents}
+            onChangeCents={setLimitCents}
             placeholder="Limite R$"
-            placeholderTextColor="#64748B"
-            keyboardType="decimal-pad"
           />
         </View>
 
@@ -533,11 +553,12 @@ export default function CardsScreen({
                 ownerUserId === null && styles.chipTextActive,
               ]}
             >
-              Cartão da Casa
+              Casa (Conjunta)
             </Text>
           </Pressable>
-          {memberRows.map((m) => {
+          {effectiveMembers.map((m) => {
             const active = ownerUserId === m.userId;
+            const isMe = m.userId === sessionUserId;
             return (
               <Pressable
                 key={m.id}
@@ -548,7 +569,7 @@ export default function CardsScreen({
                 <Text
                   style={[styles.chipText, active && styles.chipTextActive]}
                 >
-                  {m.displayName}
+                  Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
                 </Text>
               </Pressable>
             );
@@ -704,7 +725,7 @@ export default function CardsScreen({
         currentUserId={currentUserId}
         cards={cardRows}
         categories={categoryRows}
-        members={memberRows}
+        members={effectiveMembers}
       />
     </View>
   );

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { CurrencyInput } from './CurrencyInput';
+import { DatePickerInput } from './DatePickerInput';
 import type { TransactionStatus } from '@/core';
 import {
   type AccountRow,
@@ -49,6 +53,38 @@ const TYPE_LABELS: Record<BaseTransactionType, string> = {
   TRANSFER: 'Transferência',
 };
 
+export function parseFriendlyDateToIso(
+  input: string,
+  fallbackMonth?: string,
+): string {
+  const trimmed = input.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  const ddmmyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const day = ddmmyyyy[1].padStart(2, '0');
+    const month = ddmmyyyy[2].padStart(2, '0');
+    const year = ddmmyyyy[3];
+    return `${year}-${month}-${day}`;
+  }
+  const ddmm = trimmed.match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (ddmm) {
+    const year = fallbackMonth
+      ? fallbackMonth.slice(0, 4)
+      : new Date().getFullYear().toString();
+    const day = ddmm[1].padStart(2, '0');
+    const month = ddmm[2].padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+  const dd = trimmed.match(/^(\d{1,2})$/);
+  if (dd && fallbackMonth) {
+    const day = dd[1].padStart(2, '0');
+    return `${fallbackMonth}-${day}`;
+  }
+  return trimmed;
+}
+
 export function TransactionQuickModal({
   visible,
   onClose,
@@ -68,21 +104,53 @@ export function TransactionQuickModal({
 
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
   const isVisible = visible ?? storeVisible;
   const effectiveHouseholdId = propHouseholdId ?? sessionHouseholdId;
   const effectiveUserId =
     propCurrentUserId ?? sessionUserId ?? members[0]?.userId ?? null;
 
+  const effectiveMembers = useMemo(() => {
+    if (members && members.length > 0) {
+      return members;
+    }
+    if (effectiveUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: effectiveHouseholdId ?? '',
+          userId: effectiveUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [members, effectiveUserId, effectiveHouseholdId, sessionUserEmail]);
+
   const [selectedType, setSelectedType] = useState<BaseTransactionType | null>(
     null,
   );
   const type = selectedType ?? storeInitialType;
 
-  const [amountInput, setAmountInput] = useState('');
+  const [amountCents, setAmountCents] = useState(0);
   const [description, setDescription] = useState('');
+  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const yesterdayIso = useMemo(
+    () => new Date(Date.now() - 86400000).toISOString().slice(0, 10),
+    [],
+  );
   const [transactionDate, setTransactionDate] = useState(
-    defaultDateIso ?? `${competenceMonth}-09`,
+    defaultDateIso ??
+      (todayIso.startsWith(competenceMonth)
+        ? todayIso
+        : `${competenceMonth}-01`),
   );
   const [status, setStatus] = useState<TransactionStatus>('CLEARED');
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
@@ -210,14 +278,6 @@ export function TransactionQuickModal({
       return;
     }
 
-    let amountCents = 0;
-    try {
-      amountCents = parseCurrencyInputToCents(amountInput);
-    } catch {
-      setErrorMessage('Informe um valor monetário válido em R$.');
-      return;
-    }
-
     if (amountCents <= 0) {
       setErrorMessage('O valor deve ser maior que R$ 0,00.');
       return;
@@ -229,6 +289,7 @@ export function TransactionQuickModal({
     }
 
     try {
+      const finalDate = parseFriendlyDateToIso(transactionDate, competenceMonth);
       const created = createBaseTransaction(targetDb, {
         householdId: effectiveHouseholdId,
         createdByUserId: effectiveUserId,
@@ -236,8 +297,8 @@ export function TransactionQuickModal({
         type,
         status,
         amountCents,
-        transactionDate: transactionDate.trim(),
-        competenceMonth: transactionDate.trim().slice(0, 7),
+        transactionDate: finalDate,
+        competenceMonth: finalDate.slice(0, 7),
         description: description.trim(),
         accountId: effectiveAccountId,
         transferAccountId:
@@ -246,7 +307,7 @@ export function TransactionQuickModal({
         isHouseholdContribution: effectiveContributionFlag,
       });
 
-      setAmountInput('');
+      setAmountCents(0);
       setDescription('');
       onSuccess?.(created);
       handleClose();
@@ -267,168 +328,152 @@ export function TransactionQuickModal({
       onRequestClose={handleClose}
     >
       <View style={styles.backdrop} testID="transaction-quick-modal">
-        <View style={styles.sheet}>
-          <View style={styles.headerRow}>
-            <Text style={styles.title}>Novo Lançamento</Text>
-            <Pressable
-              testID="quick-modal-close-button"
-              onPress={handleClose}
-              style={styles.closeBtn}
-            >
-              <Text style={styles.closeBtnText}>Fechar</Text>
-            </Pressable>
-          </View>
-
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {errorMessage ? (
-              <View style={styles.errorBanner} testID="quick-modal-error">
-                <Text style={styles.errorText}>{errorMessage}</Text>
-              </View>
-            ) : null}
-
-            {/* Tipo de Lançamento Base */}
-            <Text style={styles.label}>Tipo de Lançamento</Text>
-            <View style={styles.pillRow}>
-              {BASE_TRANSACTION_TYPES.map((t) => {
-                const active = type === t;
-                return (
-                  <Pressable
-                    key={t}
-                    testID={`quick-modal-type-${t}`}
-                    style={[styles.pill, active && styles.pillActive]}
-                    onPress={() => handleSelectType(t)}
-                  >
-                    <Text
-                      style={[styles.pillText, active && styles.pillTextActive]}
-                    >
-                      {TYPE_LABELS[t]}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            {/* Valor em Centavos (input em R$) */}
-            <Text style={styles.label}>Valor (R$)</Text>
-            <TextInput
-              testID="quick-modal-amount-input"
-              style={styles.input}
-              value={amountInput}
-              onChangeText={setAmountInput}
-              placeholder="Ex.: 125,50"
-              placeholderTextColor="#64748B"
-              keyboardType="decimal-pad"
-            />
-            {amountInput.trim() ? (
-              <Text style={styles.helperText} testID="quick-modal-amount-preview">
-                Valor contábil:{' '}
-                {(() => {
-                  try {
-                    const c = parseCurrencyInputToCents(amountInput);
-                    return c > 0 ? formatCentsToBrl(c) : 'R$ 0,00';
-                  } catch {
-                    return 'Inválido';
-                  }
-                })()}
-              </Text>
-            ) : null}
-
-            {/* Descrição */}
-            <Text style={styles.label}>Descrição</Text>
-            <TextInput
-              testID="quick-modal-description-input"
-              style={styles.input}
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Ex.: Supermercado Semanal"
-              placeholderTextColor="#64748B"
-            />
-
-            {/* Data ISO YYYY-MM-DD & Status */}
-            <View style={styles.splitRow}>
-              <View style={styles.splitCol}>
-                <Text style={styles.label}>Data (AAAA-MM-DD)</Text>
-                <TextInput
-                  testID="quick-modal-date-input"
-                  style={styles.input}
-                  value={transactionDate}
-                  onChangeText={setTransactionDate}
-                  placeholder="2026-11-09"
-                  placeholderTextColor="#64748B"
-                />
-              </View>
-              <View style={styles.splitCol}>
-                <Text style={styles.label}>Status</Text>
-                <View style={styles.pillRow}>
-                  {(['CLEARED', 'PENDING'] as const).map((st) => {
-                    const active = status === st;
-                    return (
-                      <Pressable
-                        key={st}
-                        testID={`quick-modal-status-${st}`}
-                        style={[styles.pill, active && styles.pillActive]}
-                        onPress={() => setStatus(st)}
-                      >
-                        <Text
-                          style={[
-                            styles.pillText,
-                            active && styles.pillTextActive,
-                          ]}
-                        >
-                          {st === 'CLEARED' ? 'Efetivado' : 'Pendente'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            {/* Titularidade / Ownership Selector */}
-            <Text style={styles.label}>Titularidade da Despesa / Receita</Text>
-            <View style={styles.pillRow}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.sheet}>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>Novo Lançamento</Text>
               <Pressable
-                testID="quick-modal-owner-DOMESTIC"
-                style={[
-                  styles.pill,
-                  ownerUserId === null && styles.pillActive,
-                ]}
-                onPress={() => setOwnerUserId(null)}
+                testID="quick-modal-close-button"
+                onPress={handleClose}
+                style={styles.closeBtn}
               >
-                <Text
-                  style={[
-                    styles.pillText,
-                    ownerUserId === null && styles.pillTextActive,
-                  ]}
-                >
-                  Casa (Compartilhado)
-                </Text>
+                <Text style={styles.closeBtnText}>Fechar</Text>
               </Pressable>
-
-              {members.map((m) => {
-                const active = ownerUserId === m.userId;
-                return (
-                  <Pressable
-                    key={m.id}
-                    testID={`quick-modal-owner-${m.userId}`}
-                    style={[styles.pill, active && styles.pillActive]}
-                    onPress={() => setOwnerUserId(m.userId)}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        active && styles.pillTextActive,
-                      ]}
-                    >
-                      {m.displayName}
-                    </Text>
-                  </Pressable>
-                );
-              })}
             </View>
+
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {errorMessage ? (
+                <View style={styles.errorBanner} testID="quick-modal-error">
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                </View>
+              ) : null}
+
+              {/* Tipo de Lançamento Base */}
+              <Text style={styles.label}>Tipo de Lançamento</Text>
+              <View style={styles.pillRow}>
+                {BASE_TRANSACTION_TYPES.map((t) => {
+                  const active = type === t;
+                  return (
+                    <Pressable
+                      key={t}
+                      testID={`quick-modal-type-${t}`}
+                      style={[styles.pill, active && styles.pillActive]}
+                      onPress={() => handleSelectType(t)}
+                    >
+                      <Text
+                        style={[styles.pillText, active && styles.pillTextActive]}
+                      >
+                        {TYPE_LABELS[t]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Valor em Centavos (input com máscara de banco) */}
+              <Text style={styles.label}>Valor (R$)</Text>
+              <CurrencyInput
+                testID="quick-modal-amount-input"
+                style={styles.input}
+                valueCents={amountCents}
+                onChangeCents={setAmountCents}
+                placeholder="R$ 0,00"
+              />
+
+              {/* Descrição */}
+              <Text style={styles.label}>Descrição</Text>
+              <TextInput
+                testID="quick-modal-description-input"
+                style={styles.input}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Ex.: Supermercado Semanal"
+                placeholderTextColor="#64748B"
+              />
+
+              {/* Data do Lançamento (Linha única dedicada) */}
+              <DatePickerInput
+                testID="quick-modal-date-input"
+                label="Data"
+                value={transactionDate}
+                onChange={setTransactionDate}
+              />
+
+              {/* Status */}
+              <Text style={styles.label}>Status</Text>
+              <View style={styles.pillRow}>
+                {(['CLEARED', 'PENDING'] as const).map((st) => {
+                  const active = status === st;
+                  return (
+                    <Pressable
+                      key={st}
+                      testID={`quick-modal-status-${st}`}
+                      style={[styles.pill, active && styles.pillActive]}
+                      onPress={() => setStatus(st)}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          active && styles.pillTextActive,
+                        ]}
+                      >
+                        {st === 'CLEARED' ? 'Efetivado' : 'Pendente'}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Titularidade / Ownership Selector */}
+              <Text style={styles.label}>Titularidade da Despesa / Receita</Text>
+              <View style={styles.pillRow}>
+                <Pressable
+                  testID="quick-modal-owner-DOMESTIC"
+                  style={[
+                    styles.pill,
+                    ownerUserId === null && styles.pillActive,
+                  ]}
+                  onPress={() => setOwnerUserId(null)}
+                >
+                  <Text
+                    style={[
+                      styles.pillText,
+                      ownerUserId === null && styles.pillTextActive,
+                    ]}
+                  >
+                    Casa (Conjunta)
+                  </Text>
+                </Pressable>
+
+                {effectiveMembers.map((m) => {
+                  const active = ownerUserId === m.userId;
+                  const isMe = m.userId === sessionUserId;
+                  return (
+                    <Pressable
+                      key={m.id}
+                      testID={`quick-modal-owner-${m.userId}`}
+                      style={[styles.pill, active && styles.pillActive]}
+                      onPress={() => setOwnerUserId(m.userId)}
+                    >
+                      <Text
+                        style={[
+                          styles.pillText,
+                          active && styles.pillTextActive,
+                        ]}
+                      >
+                        Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
             {/* Conta de Origem / Conta Bancária */}
             <Text style={styles.label}>
@@ -560,6 +605,7 @@ export function TransactionQuickModal({
             </Pressable>
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -571,12 +617,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.8)',
     justifyContent: 'flex-end',
   },
+  keyboardContainer: {
+    width: '100%',
+    maxHeight: '90%',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
   sheet: {
     backgroundColor: '#1E293B',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
-    maxHeight: '90%',
+    maxHeight: '100%',
     borderWidth: 1,
     borderColor: '#334155',
   },
@@ -618,6 +671,38 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     marginBottom: 6,
     marginTop: 8,
+  },
+  labelRowBetween: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  dateChipsRow: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  dateQuickChip: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  dateQuickChipActive: {
+    borderColor: '#4F46E5',
+    backgroundColor: '#312E81',
+  },
+  dateQuickChipText: {
+    color: '#94A3B8',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  dateQuickChipTextActive: {
+    color: '#E0E7FF',
+    fontWeight: '700',
   },
   input: {
     backgroundColor: '#0F172A',

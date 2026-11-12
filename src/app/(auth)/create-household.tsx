@@ -14,6 +14,8 @@ import {
   type IssuedPartnerInvite,
   issuePartnerInvite,
 } from '@/auth/onboardingService';
+import { getActiveDatabase, openEncryptedDatabase } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import { useSessionUIStore } from '@/store/sessionUI';
 
 export default function CreateHouseholdScreen() {
@@ -33,10 +35,18 @@ export default function CreateHouseholdScreen() {
     setErrorMessage(null);
     setLoading(true);
     try {
-      await createHouseholdAsFounder({
+      try {
+        await openEncryptedDatabase();
+      } catch (dbErr) {
+        console.warn('Database open error during household creation:', dbErr);
+      }
+      const targetDb = getActiveDatabase();
+      const res = await createHouseholdAsFounder({
         householdName,
         displayName,
+        db: targetDb,
       });
+      void syncHouseholdMembers(targetDb, res.householdId);
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Erro ao criar o lar.',

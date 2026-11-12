@@ -1,8 +1,10 @@
 import { FlashList } from '@shopify/flash-list';
 import { and, eq, isNull } from 'drizzle-orm';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +12,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { CurrencyInput } from '@/components/CurrencyInput';
+import { DatePickerInput } from '@/components/DatePickerInput';
 import type { RecurringFrequency, RecurringRuleType } from '@/core';
 import {
   accounts,
@@ -32,6 +36,7 @@ import {
   updateRecurringRuleWithOccurrences,
   useReactiveQuery,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
   parseCurrencyInputToCents,
@@ -52,6 +57,7 @@ export default function RecurringScreen({
 }: RecurringScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
@@ -70,7 +76,7 @@ export default function RecurringScreen({
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [formType, setFormType] = useState<RecurringRuleType>('EXPENSE');
   const [formDescription, setFormDescription] = useState('');
-  const [formAmountInput, setFormAmountInput] = useState('');
+  const [formAmountCents, setFormAmountCents] = useState(0);
   const [formDayOfMonth, setFormDayOfMonth] = useState('10');
   const [formFrequency, setFormFrequency] = useState<RecurringFrequency>('MONTHLY');
   const [formStartMonth, setFormStartMonth] = useState(competenceMonth);
@@ -79,6 +85,12 @@ export default function RecurringScreen({
   const [formAccountId, setFormAccountId] = useState('');
   const [formCardId, setFormCardId] = useState('');
   const [formOwnerUserId, setFormOwnerUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (db && householdId) {
+      void syncHouseholdMembers(db, householdId);
+    }
+  }, [db, householdId]);
 
   // Reactive queries
   const { data: memberRows } = useReactiveQuery(
@@ -96,6 +108,29 @@ export default function RecurringScreen({
         : null,
     [db, householdId],
   );
+
+  const effectiveMembers = useMemo(() => {
+    if (memberRows && memberRows.length > 0) {
+      return memberRows;
+    }
+    if (sessionUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: householdId ?? '',
+          userId: sessionUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
 
   const { data: accountRows } = useReactiveQuery(
     () =>
@@ -231,7 +266,7 @@ export default function RecurringScreen({
     setEditingRuleId(null);
     setFormType('EXPENSE');
     setFormDescription('');
-    setFormAmountInput('');
+    setFormAmountCents(0);
     setFormDayOfMonth('10');
     setFormFrequency('MONTHLY');
     setFormStartMonth(competenceMonth);
@@ -248,7 +283,7 @@ export default function RecurringScreen({
     setEditingRuleId(item.rule.id);
     setFormType(item.rule.type);
     setFormDescription(item.rule.description);
-    setFormAmountInput(formatCentsToBrl(item.rule.amountCents).replace('R$', '').trim());
+    setFormAmountCents(item.rule.amountCents);
     setFormDayOfMonth(String(item.rule.dayOfMonth));
     setFormFrequency(item.rule.frequency);
     setFormStartMonth(item.rule.startMonth);
@@ -265,7 +300,7 @@ export default function RecurringScreen({
     if (!db || !householdId || !currentUserId) return;
     setErrorMessage(null);
 
-    const cents = parseCurrencyInputToCents(formAmountInput);
+    const cents = formAmountCents;
     if (cents <= 0) {
       setErrorMessage('Informe um valor válido maior que zero.');
       return;
@@ -441,7 +476,7 @@ export default function RecurringScreen({
             Casa
           </Text>
         </Pressable>
-        {memberRows?.map((member) => {
+        {effectiveMembers.map((member) => {
           const isSelected =
             ownershipFilter.mode === 'USER' && ownershipFilter.userId === member.userId;
           return (
@@ -740,8 +775,16 @@ export default function RecurringScreen({
       {/* Add / Edit Rule Modal */}
       <Modal visible={isModalOpen} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <ScrollView showsVerticalScrollIndicator={false}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.keyboardContainer}
+          >
+            <View style={styles.modalContent}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={styles.scrollContent}
+              >
               <Text style={styles.modalTitle}>
                 {editingRuleId ? 'Editar Regra Recorrente' : 'Nova Regra Recorrente'}
               </Text>
@@ -811,13 +854,11 @@ export default function RecurringScreen({
 
               {/* Amount */}
               <Text style={styles.inputLabel}>Valor (R$)</Text>
-              <TextInput
+              <CurrencyInput
                 style={styles.textInput}
-                value={formAmountInput}
-                onChangeText={setFormAmountInput}
-                placeholder="0,00"
-                placeholderTextColor="#64748B"
-                keyboardType="numeric"
+                valueCents={formAmountCents}
+                onChangeCents={setFormAmountCents}
+                placeholder="R$ 0,00"
               />
 
               {/* Day of Month & Frequency */}
@@ -872,29 +913,24 @@ export default function RecurringScreen({
                 </View>
               </View>
 
-              {/* Start & End Month */}
-              <View style={styles.rowInputs}>
-                <View style={styles.colInput}>
-                  <Text style={styles.inputLabel}>Início (YYYY-MM)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formStartMonth}
-                    onChangeText={setFormStartMonth}
-                    placeholder="2026-01"
-                    placeholderTextColor="#64748B"
-                  />
-                </View>
-                <View style={styles.colInput}>
-                  <Text style={styles.inputLabel}>Fim Opcional (YYYY-MM)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={formEndMonth}
-                    onChangeText={setFormEndMonth}
-                    placeholder="Ex: 2026-12"
-                    placeholderTextColor="#64748B"
-                  />
-                </View>
-              </View>
+              {/* Start & End Month (Linhas dedicadas com calendário de mês) */}
+              <DatePickerInput
+                testID="recurring-start-month-input"
+                label="Mês de Início da Regra"
+                mode="month"
+                value={formStartMonth}
+                onChange={setFormStartMonth}
+              />
+
+              <DatePickerInput
+                testID="recurring-end-month-input"
+                label="Mês de Término (Opcional)"
+                mode="month"
+                allowClear
+                placeholder="Indeterminado (Sem data de término)"
+                value={formEndMonth}
+                onChange={setFormEndMonth}
+              />
 
               {/* Category Picker */}
               <Text style={styles.inputLabel}>Categoria</Text>
@@ -974,7 +1010,7 @@ export default function RecurringScreen({
               )}
 
               {/* Owner Picker */}
-              <Text style={styles.inputLabel}>Responsável</Text>
+              <Text style={styles.inputLabel}>Responsável / Titularidade</Text>
               <View style={styles.ownerPickerRow}>
                 <Pressable
                   style={[
@@ -989,28 +1025,31 @@ export default function RecurringScreen({
                       formOwnerUserId === null && styles.choicePillTextActive,
                     ]}
                   >
-                    Casa (Conjunto)
+                    Casa (Conjunta)
                   </Text>
                 </Pressable>
-                {memberRows?.map((member) => (
-                  <Pressable
-                    key={member.id}
-                    style={[
-                      styles.choicePill,
-                      formOwnerUserId === member.userId && styles.choicePillActive,
-                    ]}
-                    onPress={() => setFormOwnerUserId(member.userId)}
-                  >
-                    <Text
+                {effectiveMembers.map((member) => {
+                  const isMe = member.userId === sessionUserId;
+                  return (
+                    <Pressable
+                      key={member.id}
                       style={[
-                        styles.choicePillText,
-                        formOwnerUserId === member.userId && styles.choicePillTextActive,
+                        styles.choicePill,
+                        formOwnerUserId === member.userId && styles.choicePillActive,
                       ]}
+                      onPress={() => setFormOwnerUserId(member.userId)}
                     >
-                      {member.displayName}
-                    </Text>
-                  </Pressable>
-                ))}
+                      <Text
+                        style={[
+                          styles.choicePillText,
+                          formOwnerUserId === member.userId && styles.choicePillTextActive,
+                        ]}
+                      >
+                        Pessoal ({member.displayName}{isMe ? ' - Você' : ''})
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
 
               {/* Buttons */}
@@ -1027,6 +1066,7 @@ export default function RecurringScreen({
               </View>
             </ScrollView>
           </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </View>
@@ -1039,6 +1079,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F172A',
     paddingHorizontal: 16,
     paddingTop: 12,
+  },
+  keyboardContainer: {
+    width: '100%',
+    maxHeight: '92%',
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   monthHeader: {
     flexDirection: 'row',

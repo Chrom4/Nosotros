@@ -1,8 +1,9 @@
 import { FlashList } from '@shopify/flash-list';
 import { and, eq, isNull } from 'drizzle-orm';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -22,7 +23,35 @@ import {
   updateCategory,
   useReactiveQuery,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import { useFiltersStore, useSessionUIStore } from '@/store';
+
+export const POPULAR_CATEGORY_ICONS = [
+  { id: 'utensils', emoji: '🍽️', label: 'Restaurante' },
+  { id: 'shopping-cart', emoji: '🛒', label: 'Mercado' },
+  { id: 'coffee', emoji: '☕', label: 'Café' },
+  { id: 'home', emoji: '🏠', label: 'Moradia' },
+  { id: 'building', emoji: '🏢', label: 'Condomínio' },
+  { id: 'zap', emoji: '⚡', label: 'Contas' },
+  { id: 'wifi', emoji: '📶', label: 'Internet' },
+  { id: 'car', emoji: '🚗', label: 'Transporte' },
+  { id: 'navigation', emoji: '⛽', label: 'Combustível' },
+  { id: 'heart', emoji: '💊', label: 'Saúde' },
+  { id: 'smile', emoji: '🎉', label: 'Lazer' },
+  { id: 'film', emoji: '🎬', label: 'Streaming' },
+  { id: 'book', emoji: '📚', label: 'Educação' },
+  { id: 'gift', emoji: '🎁', label: 'Presentes' },
+  { id: 'briefcase', emoji: '💼', label: 'Trabalho' },
+  { id: 'trending-up', emoji: '📈', label: 'Investimento' },
+  { id: 'dollar-sign', emoji: '💰', label: 'Salário' },
+  { id: 'tag', emoji: '🏷️', label: 'Outro' },
+] as const;
+
+export function getCategoryEmoji(iconName?: string | null): string {
+  if (!iconName) return '🏷️';
+  const found = POPULAR_CATEGORY_ICONS.find((i) => i.id === iconName);
+  return found ? found.emoji : '🏷️';
+}
 
 const COLOR_SWATCHES = [
   '#10B981',
@@ -48,6 +77,12 @@ export default function CategoriesScreen({
 
   const db = propDb ?? getActiveDatabase();
   const householdId = propHouseholdId ?? sessionHouseholdId;
+
+  useEffect(() => {
+    if (db && householdId) {
+      syncHouseholdMembers(db, householdId).catch(() => {});
+    }
+  }, [db, householdId]);
 
   const { data: categoryRows } = useReactiveQuery(
     () =>
@@ -210,7 +245,7 @@ export default function CategoriesScreen({
             ? 'Editar Categoria'
             : parentId
               ? 'Nova Subcategoria'
-              : 'Nova Categoria Raiz'}
+              : 'Nova Categoria Principal (Raiz)'}
         </Text>
 
         {errorMessage ? (
@@ -225,7 +260,7 @@ export default function CategoriesScreen({
             style={[styles.input, { flex: 2 }]}
             value={name}
             onChangeText={setName}
-            placeholder="Nome (ex.: Alimentação ou Supermercado)"
+            placeholder="Nome (ex.: Alimentação ou Mercado)"
             placeholderTextColor="#64748B"
           />
           <TextInput
@@ -233,10 +268,43 @@ export default function CategoriesScreen({
             style={[styles.input, { flex: 1 }]}
             value={iconName}
             onChangeText={setIconName}
-            placeholder="Ícone"
+            placeholder="ID Ícone"
             placeholderTextColor="#64748B"
           />
         </View>
+
+        <Text style={styles.subLabel}>Selecione um Ícone:</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.iconGridScroll}
+          contentContainerStyle={styles.iconGridContent}
+        >
+          {POPULAR_CATEGORY_ICONS.map((item) => {
+            const isSelected = iconName === item.id;
+            return (
+              <Pressable
+                key={item.id}
+                style={[
+                  styles.iconBadge,
+                  isSelected && styles.iconBadgeSelected,
+                ]}
+                onPress={() => setIconName(item.id)}
+              >
+                <Text style={styles.iconEmoji}>{item.emoji}</Text>
+                <Text
+                  style={[
+                    styles.iconBadgeLabel,
+                    isSelected && styles.iconBadgeLabelSelected,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
 
         <Text style={styles.subLabel}>Hierarquia (Categoria Pai):</Text>
         <View style={styles.chipRow}>
@@ -251,7 +319,7 @@ export default function CategoriesScreen({
                 parentId === null && styles.chipTextActive,
               ]}
             >
-              Raiz (Principal)
+              Principal (Sem Pai / Raiz)
             </Text>
           </Pressable>
           {rootCategoriesForKind
@@ -275,6 +343,7 @@ export default function CategoriesScreen({
             })}
         </View>
 
+        <Text style={styles.subLabel}>Cor de Destaque:</Text>
         <View style={styles.colorRow}>
           {COLOR_SWATCHES.map((swatch) => {
             const selected = colorHex.toUpperCase() === swatch.toUpperCase();
@@ -338,6 +407,9 @@ export default function CategoriesScreen({
                     { backgroundColor: item.row.colorHex },
                   ]}
                 />
+                <Text style={styles.itemEmoji}>
+                  {getCategoryEmoji(item.row.iconName)}
+                </Text>
                 <View>
                   <Text
                     style={styles.categoryName}
@@ -457,6 +529,44 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     color: '#F8FAFC',
     fontSize: 14,
+  },
+  iconGridScroll: {
+    marginBottom: 10,
+  },
+  iconGridContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  iconBadge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 64,
+  },
+  iconBadgeSelected: {
+    borderColor: '#818CF8',
+    backgroundColor: '#312E81',
+  },
+  iconEmoji: {
+    fontSize: 18,
+    marginBottom: 2,
+  },
+  iconBadgeLabel: {
+    color: '#94A3B8',
+    fontSize: 10,
+  },
+  iconBadgeLabelSelected: {
+    color: '#E0E7FF',
+    fontWeight: '600',
+  },
+  itemEmoji: {
+    fontSize: 18,
   },
   subLabel: {
     color: '#94A3B8',

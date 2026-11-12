@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list';
 import { and, eq, isNull } from 'drizzle-orm';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { CurrencyInput } from '@/components/CurrencyInput';
 import type { AccountType, OwnershipFilter } from '@/core';
 import {
   type AccountRow,
@@ -23,6 +24,7 @@ import {
   updateAccount,
   useReactiveQuery,
 } from '@/data';
+import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
   parseCurrencyInputToCents,
@@ -47,6 +49,8 @@ export default function AccountsScreen({
   householdId: propHouseholdId,
 }: AccountsScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
+  const sessionUserId = useSessionUIStore((s) => s.userId);
+  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
 
@@ -87,6 +91,12 @@ export default function AccountsScreen({
     ['transactions'],
   );
 
+  useEffect(() => {
+    if (db && householdId) {
+      void syncHouseholdMembers(db, householdId);
+    }
+  }, [db, householdId]);
+
   const { data: memberRows } = useReactiveQuery(
     () =>
       db && householdId
@@ -103,6 +113,29 @@ export default function AccountsScreen({
     [db, householdId],
   );
 
+  const effectiveMembers = useMemo(() => {
+    if (memberRows && memberRows.length > 0) {
+      return memberRows;
+    }
+    if (sessionUserId) {
+      return [
+        {
+          id: 'me',
+          householdId: householdId ?? '',
+          userId: sessionUserId,
+          displayName: sessionUserEmail
+            ? sessionUserEmail.split('@')[0]
+            : 'Você',
+          role: 'FOUNDER' as const,
+          colorHex: '#4F46E5',
+          joinedAt: new Date().toISOString(),
+          revokedAt: null,
+        },
+      ];
+    }
+    return [];
+  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
+
   const accountsWithBalances = useMemo(
     () => computeAccountsWithBalances(accountRows, txRows, ownershipFilter),
     [accountRows, txRows, ownershipFilter],
@@ -117,7 +150,7 @@ export default function AccountsScreen({
   const [editingAccount, setEditingAccount] = useState<AccountRow | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('CHECKING');
-  const [initialBalanceInput, setInitialBalanceInput] = useState('0,00');
+  const [initialBalanceCents, setInitialBalanceCents] = useState(0);
   const [ownerUserId, setOwnerUserId] = useState<string | null>(null);
   const [includeInNetWorth, setIncludeInNetWorth] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -126,7 +159,7 @@ export default function AccountsScreen({
     setEditingAccount(null);
     setName('');
     setType('CHECKING');
-    setInitialBalanceInput('0,00');
+    setInitialBalanceCents(0);
     setOwnerUserId(null);
     setIncludeInNetWorth(true);
     setErrorMessage(null);
@@ -136,9 +169,7 @@ export default function AccountsScreen({
     setEditingAccount(account);
     setName(account.name);
     setType(account.type);
-    setInitialBalanceInput(
-      `${Math.floor(account.initialBalanceCents / 100)},${String(Math.abs(account.initialBalanceCents % 100)).padStart(2, '0')}`,
-    );
+    setInitialBalanceCents(account.initialBalanceCents);
     setOwnerUserId(account.ownerUserId);
     setIncludeInNetWorth(account.includeInNetWorth);
     setErrorMessage(null);
@@ -153,14 +184,6 @@ export default function AccountsScreen({
 
     if (!name.trim()) {
       setErrorMessage('Informe o nome da conta ou carteira.');
-      return;
-    }
-
-    let initialBalanceCents = 0;
-    try {
-      initialBalanceCents = parseCurrencyInputToCents(initialBalanceInput);
-    } catch {
-      setErrorMessage('Saldo inicial inválido.');
       return;
     }
 
@@ -253,7 +276,7 @@ export default function AccountsScreen({
             { mode: 'DOMESTIC' },
             'accounts-filter-DOMESTIC',
           )}
-          {memberRows.map((m) =>
+          {effectiveMembers.map((m) =>
             renderFilterChip(
               m.displayName,
               { mode: 'USER', userId: m.userId },
@@ -284,14 +307,12 @@ export default function AccountsScreen({
             placeholder="Nome (ex.: Itaú Conjunta)"
             placeholderTextColor="#64748B"
           />
-          <TextInput
+          <CurrencyInput
             testID="account-initial-balance-input"
             style={[styles.input, { flex: 1 }]}
-            value={initialBalanceInput}
-            onChangeText={setInitialBalanceInput}
+            valueCents={initialBalanceCents}
+            onChangeCents={setInitialBalanceCents}
             placeholder="Saldo R$"
-            placeholderTextColor="#64748B"
-            keyboardType="decimal-pad"
           />
         </View>
 
@@ -327,11 +348,12 @@ export default function AccountsScreen({
                 ownerUserId === null && styles.chipTextActive,
               ]}
             >
-              Conjunta (Casa)
+              Casa (Conjunta)
             </Text>
           </Pressable>
-          {memberRows.map((m) => {
+          {effectiveMembers.map((m) => {
             const active = ownerUserId === m.userId;
+            const isMe = m.userId === sessionUserId;
             return (
               <Pressable
                 key={m.id}
@@ -342,7 +364,7 @@ export default function AccountsScreen({
                 <Text
                   style={[styles.chipText, active && styles.chipTextActive]}
                 >
-                  {m.displayName}
+                  Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
                 </Text>
               </Pressable>
             );
