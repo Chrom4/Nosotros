@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as SQLite from 'expo-sqlite';
 import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
-import { ensureLocalSchema } from './localSchemaDdl';
+import { applyLocalMigrations } from './migrations/localMigrations';
 import * as schema from './schema';
 
 export const SQLCIPHER_KEY_STORAGE_KEY = 'local_sqlcipher_key_v1';
@@ -142,7 +142,7 @@ export async function openEncryptedDatabase(
   sqlite.execSync(`PRAGMA key = "x'${keyHex}'";`);
   sqlite.execSync('PRAGMA journal_mode = WAL;');
   sqlite.execSync('PRAGMA foreign_keys = ON;');
-  ensureLocalSchema(sqlite);
+  applyLocalMigrations(sqlite);
 
   const db = drizzle(sqlite, { schema });
   cachedExpoDb = db;

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { HouseholdMemberRole } from '@/data/schema';
+import { persistHouseholdContext } from './householdPersistence';
 
 /**
  * DEC-03: Biometric lock threshold after background inactivity (default: 2 minutes).
@@ -15,6 +16,11 @@ export interface EphemeralSessionPayload {
   memberRole?: HouseholdMemberRole | null;
 }
 
+export interface DbStatusPayload {
+  ready: boolean;
+  error?: string | null;
+}
+
 export interface SessionUIState {
   authStatus: AuthStatus;
   userId: string | null;
@@ -26,6 +32,10 @@ export interface SessionUIState {
   isSyncHalted: boolean;
   revocationNotice: string | null;
   authError: string | null;
+  /** True after ensureLocalSessionReady successfully opened SQLCipher. */
+  dbReady: boolean;
+  /** Visible vault open error (key/file), if any. */
+  dbError: string | null;
 
   setSession: (
     session: EphemeralSessionPayload | null,
@@ -35,6 +45,7 @@ export interface SessionUIState {
     householdId: string | null,
     role: HouseholdMemberRole | null,
   ) => void;
+  setDbStatus: (status: DbStatusPayload) => void;
   lockBiometrics: () => void;
   unlockBiometrics: () => void;
   recordBackgroundTimestamp: (timestampMs: number) => void;
@@ -58,6 +69,8 @@ const initialState = {
   isSyncHalted: false,
   revocationNotice: null,
   authError: null,
+  dbReady: false,
+  dbError: null,
 };
 
 export const useSessionUIStore = create<SessionUIState>((set, get) => ({
@@ -74,34 +87,52 @@ export const useSessionUIStore = create<SessionUIState>((set, get) => ({
         isBiometricLocked: false,
         lastBackgroundedAtMs: null,
         authError: null,
+        dbReady: false,
+        dbError: null,
       });
+      void persistHouseholdContext(null, null);
       return;
     }
 
     const shouldLock = options?.lockBiometricsOnRestore ?? false;
+    const nextHouseholdId =
+      session.activeHouseholdId !== undefined
+        ? session.activeHouseholdId
+        : get().activeHouseholdId;
+    const nextRole =
+      session.memberRole !== undefined
+        ? session.memberRole
+        : get().memberRole;
+
     set((state) => ({
       authStatus: 'AUTHENTICATED',
       userId: session.userId,
       userEmail: session.userEmail.trim().toLowerCase(),
-      activeHouseholdId:
-        session.activeHouseholdId !== undefined
-          ? session.activeHouseholdId
-          : state.activeHouseholdId,
-      memberRole:
-        session.memberRole !== undefined
-          ? session.memberRole
-          : state.memberRole,
+      activeHouseholdId: nextHouseholdId,
+      memberRole: nextRole,
       isBiometricLocked: shouldLock ? true : state.isBiometricLocked,
       isSyncHalted: false,
       revocationNotice: null,
       authError: null,
     }));
+
+    if (session.activeHouseholdId !== undefined) {
+      void persistHouseholdContext(nextHouseholdId, nextRole);
+    }
   },
 
   setHouseholdContext: (householdId, role) => {
     set({
       activeHouseholdId: householdId,
       memberRole: role,
+    });
+    void persistHouseholdContext(householdId, role);
+  },
+
+  setDbStatus: (status) => {
+    set({
+      dbReady: status.ready,
+      dbError: status.error ?? null,
     });
   },
 
@@ -159,7 +190,10 @@ export const useSessionUIStore = create<SessionUIState>((set, get) => ({
       isSyncHalted: true,
       revocationNotice: notice,
       authError: null,
+      dbReady: false,
+      dbError: null,
     });
+    void persistHouseholdContext(null, null);
   },
 
   setAuthError: (error) => {
@@ -168,5 +202,6 @@ export const useSessionUIStore = create<SessionUIState>((set, get) => ({
 
   resetSessionUI: () => {
     set({ ...initialState });
+    void persistHouseholdContext(null, null);
   },
 }));

@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ensureLocalSessionReady } from '@/auth/localSession';
 import {
   loginWithEmailPassword,
   signUpWithEmailPassword,
@@ -47,8 +48,8 @@ export default function LoginScreen() {
         await signUpWithEmailPassword({ email: trimmedEmail, password });
       }
 
-      const activeHouseholdId = useSessionUIStore.getState().activeHouseholdId;
-      if (activeHouseholdId) {
+      const sessionReady = await ensureLocalSessionReady();
+      if (sessionReady.householdId) {
         router.replace('/');
       } else {
         router.replace('/(auth)/create-household');

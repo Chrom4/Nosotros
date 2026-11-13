@@ -1,8 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from './BottomSheetModal';
 import { CurrencyInput } from './CurrencyInput';
 import { DatePickerInput } from './DatePickerInput';
 import { parseFriendlyDateToIso } from './TransactionQuickModal';
@@ -34,12 +32,8 @@ import {
   softDeleteInstallmentPlan,
   type TransactionRow,
 } from '@/data';
-import {
-  formatCentsToBrl,
-  parseCurrencyInputToCents,
-  useFiltersStore,
-  useSessionUIStore,
-} from '@/store';
+import { formatCentsToBrl, useFiltersStore, useSessionUIStore } from '@/store';
+import { todayLocalIso } from '@/utils/localDate';
 
 export type InstallmentEditorMode =
   | 'CREATE_PURCHASE'
@@ -66,8 +60,30 @@ export interface InstallmentEditorProps {
   defaultDateIso?: string;
 }
 
-export function InstallmentEditor({
-  visible,
+export function InstallmentEditor(props: InstallmentEditorProps) {
+  const { visible, onClose, initialMode = 'CREATE_INSTALLMENT', targetPlan } =
+    props;
+  const title =
+    targetPlan || initialMode === 'EDIT_INSTALLMENT'
+      ? 'Editar Parcelamento (Escopo A / B)'
+      : 'Lançamento no Cartão de Crédito';
+
+  return (
+    <BottomSheetModal
+      visible={visible}
+      onClose={onClose}
+      testID="installment-editor-modal"
+      closeTestID="installment-editor-close"
+      title={title}
+    >
+      {visible ? (
+        <InstallmentEditorBody key="installment-open" {...props} />
+      ) : null}
+    </BottomSheetModal>
+  );
+}
+
+function InstallmentEditorBody({
   onClose,
   onSuccess,
   initialMode = 'CREATE_INSTALLMENT',
@@ -134,12 +150,10 @@ export function InstallmentEditor({
         : null,
   );
   const [amountCents, setAmountCents] = useState(0);
-  const [installmentsInput, setInstallmentsInput] = useState('3');
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const yesterdayIso = useMemo(
-    () => new Date(Date.now() - 86400000).toISOString().slice(0, 10),
-    [],
+  const [installmentsInput, setInstallmentsInput] = useState(
+    initialMode === 'CREATE_PURCHASE' ? '1' : '3',
   );
+  const todayIso = todayLocalIso();
   const [purchaseDate, setPurchaseDate] = useState(
     defaultDateIso ??
       (todayIso.startsWith(competenceMonth)
@@ -150,29 +164,6 @@ export function InstallmentEditor({
     targetPlan?.plan.description ?? '',
   );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (visible) {
-      setMode(initialMode);
-      if (initialCardId) {
-        setCreditCardId(initialCardId);
-      }
-      if (initialMode === 'CREATE_PURCHASE') {
-        setInstallmentsInput('1');
-      } else if (initialMode === 'CREATE_INSTALLMENT') {
-        setInstallmentsInput('3');
-      }
-      setAmountCents(0);
-      setErrorMessage(null);
-      const currentToday = new Date().toISOString().slice(0, 10);
-      setPurchaseDate(
-        defaultDateIso ??
-          (currentToday.startsWith(competenceMonth)
-            ? currentToday
-            : `${competenceMonth}-01`),
-      );
-    }
-  }, [visible, initialMode, initialCardId, competenceMonth, defaultDateIso]);
 
   const activeMode: InstallmentEditorMode = targetPlan
     ? 'EDIT_INSTALLMENT'
@@ -414,38 +405,11 @@ export function InstallmentEditor({
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-    >
-      <View style={styles.backdrop} testID="installment-editor-modal">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardContainer}
-        >
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <Text style={styles.title}>
-                {activeMode === 'EDIT_INSTALLMENT'
-                  ? 'Editar Parcelamento (Escopo A / B)'
-                  : 'Lançamento no Cartão de Crédito'}
-              </Text>
-              <Pressable
-                testID="installment-editor-close"
-                onPress={handleClose}
-                style={styles.closeBtn}
-              >
-                <Text style={styles.closeBtnText}>Fechar</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
             {errorMessage ? (
               <View
                 style={styles.errorBanner}
@@ -764,11 +728,7 @@ export function InstallmentEditor({
                 </Text>
               </Pressable>
             ) : null}
-          </ScrollView>
-        </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      </ScrollView>
   );
 }
 

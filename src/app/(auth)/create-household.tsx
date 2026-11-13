@@ -9,12 +9,12 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ensureLocalSessionReady } from '@/auth/localSession';
 import {
   createHouseholdAsFounder,
   type IssuedPartnerInvite,
   issuePartnerInvite,
 } from '@/auth/onboardingService';
-import { getActiveDatabase, openEncryptedDatabase } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
 import { useSessionUIStore } from '@/store/sessionUI';
 
@@ -35,18 +35,14 @@ export default function CreateHouseholdScreen() {
     setErrorMessage(null);
     setLoading(true);
     try {
-      try {
-        await openEncryptedDatabase();
-      } catch (dbErr) {
-        console.warn('Database open error during household creation:', dbErr);
-      }
-      const targetDb = getActiveDatabase();
+      const { db: targetDb } = await ensureLocalSessionReady();
       const res = await createHouseholdAsFounder({
         householdName,
         displayName,
         db: targetDb,
       });
       void syncHouseholdMembers(targetDb, res.householdId);
+      await ensureLocalSessionReady();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Erro ao criar o lar.',

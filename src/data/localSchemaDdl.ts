@@ -296,6 +296,10 @@ CREATE INDEX IF NOT EXISTS \`idx_outbox_table_record\` ON \`sync_outbox\` (\`tab
 CREATE INDEX IF NOT EXISTS \`idx_outbox_batch_id\` ON \`sync_outbox\` (\`batch_id\`);
 `;
 
+/**
+ * @deprecated Prefer `applyLocalMigrations` from `./migrations/localMigrations`.
+ * Kept for callers that only need the IF NOT EXISTS bootstrap DDL.
+ */
 export function ensureLocalSchema(sqlite: SQLite.SQLiteDatabase): void {
   sqlite.execSync(LOCAL_SCHEMA_DDL);
 }

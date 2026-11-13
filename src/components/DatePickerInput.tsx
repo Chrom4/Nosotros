@@ -6,6 +6,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { todayLocalIso, yesterdayLocalIso } from '@/utils/localDate';
 
 export interface DatePickerInputProps {
   value: string; // ISO 'YYYY-MM-DD' for date mode or 'YYYY-MM' for month mode
@@ -111,7 +112,7 @@ export function DatePickerInput({
   const [viewMonth, setViewMonth] = useState(parsed.month);
 
   const today = useMemo(() => new Date(), []);
-  const todayIso = useMemo(() => today.toISOString().slice(0, 10), [today]);
+  const todayIso = useMemo(() => todayLocalIso(today), [today]);
   const currentMonthIso = useMemo(() => {
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
   }, [today]);
@@ -120,10 +121,7 @@ export function DatePickerInput({
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }, [today]);
 
-  const yesterdayIso = useMemo(
-    () => new Date(Date.now() - 86400000).toISOString().slice(0, 10),
-    [],
-  );
+  const yesterdayIso = useMemo(() => yesterdayLocalIso(today), [today]);
 
   const openCalendar = () => {
     setViewYear(parsed.year);

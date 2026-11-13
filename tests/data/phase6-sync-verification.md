@@ -17,7 +17,7 @@ Verificação automatizada ponta a ponta (`tests/data/phase6-accounts-transactio
 | **GATE-6.1** | CRUD de Contas e Categorias hierárquicas (2 níveis) operando exclusivamente via repositórios transacionais (`domain` + `sync_outbox`) e Soft Delete (`deleted_at`). | **PASS** | `tests/data/phase6-accounts-transactions.test.ts` (`T6.2`) |
 | **GATE-6.2** | Captura rápida de `INCOME`, `EXPENSE`, `DEBIT_REFUND` e `TRANSFER` com seletor de titularidade e flag `is_household_contribution` (**DEC-02**). | **PASS** | `tests/data/phase6-accounts-transactions.test.ts` (`T6.2 & Gates`) |
 | **GATE-6.3** | Rejeição imediata de combinações inválidas de ponteiros (`EXPENSE` sem categoria, `TRANSFER` com categoria, auto-transferência `account_id = transfer_account_id`, incompatibilidade `INCOME`/`EXPENSE`). | **PASS** | `tests/data/phase6-accounts-transactions.test.ts` (`T6.2 & Gates`) |
-| **GATE-6.4** | Atualização reativa local (`useLiveQuery` / `useReactiveQuery`) com latência percebida **< 16ms** e reconciliação bidirecional **Device A ↔ Device B** após reconexão. | **PASS** | `tests/data/phase6-accounts-transactions.test.ts` (`T6.3 & T6.4`) |
+| **GATE-6.4** | Atualização reativa local (`useLiveQuery` / `useReactiveQuery`) com latência percebida local (bound de regressão em teste) e reconciliação **peer-to-peer** via `reconcilePeerOutbox` (simulação A↔B). | **PASS (local peer)** | `tests/data/phase6-accounts-transactions.test.ts` (`T6.3 & T6.4`) — **não** substitui a Fase 4 (`sync_push_batch` / `sync_pull_changes`) |
 
 ---
 

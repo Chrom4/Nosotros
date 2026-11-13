@@ -129,3 +129,24 @@ export function listActiveHouseholdMembers(
     )
     .all();
 }
+
+/**
+ * Offline hydration: find the active membership row for a user in local SQLite.
+ */
+export function findLocalMembershipForUser(
+  db: AppDatabase,
+  userId: string,
+): HouseholdMemberRow | null {
+  return (
+    db
+      .select()
+      .from(householdMembers)
+      .where(
+        and(
+          eq(householdMembers.userId, userId),
+          isNull(householdMembers.revokedAt),
+        ),
+      )
+      .get() ?? null
+  );
+}

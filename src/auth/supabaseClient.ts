@@ -148,13 +148,16 @@ export function createAppSupabaseClient(
     process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
     'public-anon-placeholder-key';
 
-  if (
-    url === 'https://placeholder.supabase.co' &&
-    typeof __DEV__ !== 'undefined' &&
-    __DEV__
-  ) {
-    console.warn(
-      '[SupabaseClient] ATENÇÃO: EXPO_PUBLIC_SUPABASE_URL e EXPO_PUBLIC_SUPABASE_ANON_KEY não estão configuradas no ambiente. Crie um arquivo .env na raiz do projeto ou configure no EAS.',
+  const isPlaceholderConfig =
+    url === 'https://placeholder.supabase.co' ||
+    anonKey === 'public-anon-placeholder-key';
+
+  const isDev =
+    typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+
+  if (isPlaceholderConfig && !isDev) {
+    throw new Error(
+      'SUPABASE_CONFIG_ERROR: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY must be set in production builds',
     );
   }
 

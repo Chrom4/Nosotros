@@ -2,16 +2,13 @@ import { FlashList } from '@shopify/flash-list';
 import { and, eq, isNull } from 'drizzle-orm';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { CurrencyInput } from '@/components/CurrencyInput';
 import { DatePickerInput } from '@/components/DatePickerInput';
 import type { RecurringFrequency, RecurringRuleType } from '@/core';
@@ -24,7 +21,6 @@ import {
   createRecurringRule,
   creditCards,
   generateUuidV4,
-  getActiveDatabase,
   householdMembers,
   listRecurringOccurrencesForMonth,
   listRecurringRulesWithDetails,
@@ -34,15 +30,16 @@ import {
   softDeleteRecurringRule,
   transactions,
   updateRecurringRuleWithOccurrences,
+  useActiveDatabase,
   useReactiveQuery,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
-  parseCurrencyInputToCents,
   useFiltersStore,
   useSessionUIStore,
 } from '@/store';
+import { styles } from './recurring.styles';
 
 export interface RecurringScreenProps {
   db?: AppDatabase | null;
@@ -63,7 +60,7 @@ export default function RecurringScreen({
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
   const shiftCompetenceMonth = useFiltersStore((s) => s.shiftCompetenceMonth);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
   const currentUserId = propCurrentUserId ?? sessionUserId;
 
@@ -772,23 +769,19 @@ export default function RecurringScreen({
         </View>
       )}
 
-      {/* Add / Edit Rule Modal */}
-      <Modal visible={isModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardContainer}
-          >
-            <View style={styles.modalContent}>
-              <ScrollView
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-                contentContainerStyle={styles.scrollContent}
-              >
-              <Text style={styles.modalTitle}>
-                {editingRuleId ? 'Editar Regra Recorrente' : 'Nova Regra Recorrente'}
-              </Text>
-
+      <BottomSheetModal
+        visible={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        testID="recurring-rule-modal"
+        title={
+          editingRuleId ? 'Editar Regra Recorrente' : 'Nova Regra Recorrente'
+        }
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
+        >
               {/* Type Switcher */}
               <Text style={styles.inputLabel}>Tipo de Transação</Text>
               <View style={styles.modalTypeRow}>
@@ -1064,534 +1057,8 @@ export default function RecurringScreen({
                   <Text style={styles.modalSaveButtonText}>Salvar</Text>
                 </Pressable>
               </View>
-            </ScrollView>
-          </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+        </ScrollView>
+      </BottomSheetModal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-  },
-  keyboardContainer: {
-    width: '100%',
-    maxHeight: '92%',
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
-  monthHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  navButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-  },
-  navButtonText: {
-    color: '#818CF8',
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  monthTitle: {
-    color: '#F8FAFC',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#1E293B',
-  },
-  filterPillActive: {
-    backgroundColor: '#6366F1',
-  },
-  filterPillText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  filterPillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  feedbackBanner: {
-    backgroundColor: '#065F46',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  feedbackText: {
-    color: '#D1FAE5',
-    fontSize: 13,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  errorBanner: {
-    backgroundColor: '#7F1D1D',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  errorText: {
-    color: '#FEE2E2',
-    fontSize: 13,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 12,
-  },
-  tabButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: '#334155',
-  },
-  tabButtonText: {
-    color: '#94A3B8',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  tabButtonTextActive: {
-    color: '#F8FAFC',
-  },
-  tabContent: {
-    flex: 1,
-  },
-  summaryCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  summaryCol: {
-    flex: 1,
-  },
-  summaryLabel: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: '#334155',
-    marginVertical: 10,
-  },
-  summaryFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  summaryNetValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  statusBadgePending: {
-    backgroundColor: '#78350F',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  statusBadgeTextPending: {
-    color: '#FCD34D',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  statusBadgeCleared: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  statusBadgeTextCleared: {
-    color: '#6EE7B7',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  incomeText: {
-    color: '#10B981',
-  },
-  expenseText: {
-    color: '#EF4444',
-  },
-  actionBar: {
-    marginBottom: 10,
-  },
-  materializeButton: {
-    backgroundColor: '#4F46E5',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  materializeButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  newRuleButton: {
-    backgroundColor: '#10B981',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  newRuleButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  listContainer: {
-    flex: 1,
-  },
-  emptyContainer: {
-    padding: 30,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: '#94A3B8',
-    fontSize: 15,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginBottom: 6,
-  },
-  emptySubtext: {
-    color: '#64748B',
-    fontSize: 13,
-    textAlign: 'center',
-  },
-  occurrenceCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  occurrenceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
-  },
-  categoryIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  categoryIconText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  occurrenceMeta: {
-    flex: 1,
-  },
-  occurrenceDescription: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  occurrenceSub: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  occurrenceRight: {
-    alignItems: 'flex-end',
-  },
-  occurrenceAmount: {
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  confirmButton: {
-    backgroundColor: '#D97706',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  confirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  clearedPill: {
-    backgroundColor: '#064E3B',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  clearedPillText: {
-    color: '#A7F3D0',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  ruleCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  ruleHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ruleLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    marginRight: 8,
-  },
-  ruleMeta: {
-    flex: 1,
-  },
-  ruleDescription: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  ruleSub: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 2,
-  },
-  ruleAmount: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  ruleActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 8,
-  },
-  ruleActionEdit: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: '#334155',
-    borderRadius: 6,
-  },
-  ruleActionEditText: {
-    color: '#818CF8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  ruleActionDelete: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: '#451A1A',
-    borderRadius: 6,
-  },
-  ruleActionDeleteText: {
-    color: '#FCA5A5',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#1E293B',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-  },
-  modalTitle: {
-    color: '#F8FAFC',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  inputLabel: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-    marginBottom: 4,
-    marginTop: 10,
-  },
-  textInput: {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  modalTypeRow: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 6,
-  },
-  modalTypePill: {
-    flex: 1,
-    paddingVertical: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  modalTypePillActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
-  },
-  modalTypePillText: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  modalTypePillTextActive: {
-    color: '#FFFFFF',
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  colInput: {
-    flex: 1,
-  },
-  freqToggleRow: {
-    flexDirection: 'row',
-    height: 42,
-    backgroundColor: '#0F172A',
-    borderRadius: 8,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  freqButton: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  freqButtonActive: {
-    backgroundColor: '#4F46E5',
-  },
-  freqButtonText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  freqButtonTextActive: {
-    color: '#FFFFFF',
-  },
-  pickerScroll: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  choicePill: {
-    backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  choicePillActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
-  },
-  choicePillText: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  choicePillTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-  ownerPickerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 16,
-  },
-  modalButtonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-    marginBottom: 24,
-  },
-  modalCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#334155',
-    alignItems: 'center',
-  },
-  modalCancelButtonText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalSaveButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
-    alignItems: 'center',
-  },
-  modalSaveButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-});

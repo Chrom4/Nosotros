@@ -20,6 +20,21 @@ export const SYNCABLE_TABLES = [
 
 export type SyncableTableName = (typeof SYNCABLE_TABLES)[number];
 
+/**
+ * FK topological priority shared by the local outbox, peer reconcile and the sync engine.
+ * Parents always sort before dependants (accounts -> categories -> cards -> ... -> transactions).
+ */
+export const TOPOLOGICAL_TABLE_PRIORITY: Record<SyncableTableName, number> = {
+  accounts: 1,
+  categories: 2,
+  credit_cards: 3,
+  credit_card_invoices: 4,
+  installment_plans: 5,
+  recurring_rules: 6,
+  transactions: 7,
+  budgets: 8,
+};
+
 export const OUTBOX_OPERATIONS = ['UPSERT', 'SOFT_DELETE', 'RESTORE'] as const;
 export type OutboxOperation = (typeof OUTBOX_OPERATIONS)[number];
 

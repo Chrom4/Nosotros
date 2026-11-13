@@ -1,0 +1,525 @@
+import { StyleSheet } from 'react-native';
+import { colors } from '@/theme';
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  keyboardContainer: {
+    width: '100%',
+    maxHeight: '92%',
+  },
+  scrollContent: {
+    paddingBottom: 40,
+  },
+  monthHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  navButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 8,
+  },
+  navButtonText: {
+    color: colors.accentSoft,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  monthTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  filterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceElevated,
+  },
+  filterPillActive: {
+    backgroundColor: '#6366F1',
+  },
+  filterPillText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  filterPillTextActive: {
+    color: colors.textOnAccent,
+    fontWeight: '700',
+  },
+  feedbackBanner: {
+    backgroundColor: '#065F46',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  feedbackText: {
+    color: '#D1FAE5',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  errorBanner: {
+    backgroundColor: '#7F1D1D',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#FEE2E2',
+    fontSize: 13,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    padding: 4,
+    marginBottom: 12,
+  },
+  tabButton: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabButtonActive: {
+    backgroundColor: colors.border,
+  },
+  tabButtonText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  tabButtonTextActive: {
+    color: colors.textPrimary,
+  },
+  tabContent: {
+    flex: 1,
+  },
+  summaryCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  summaryCol: {
+    flex: 1,
+  },
+  summaryLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 10,
+  },
+  summaryFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryNetValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  statusBadgePending: {
+    backgroundColor: '#78350F',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  statusBadgeTextPending: {
+    color: '#FCD34D',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  statusBadgeCleared: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  statusBadgeTextCleared: {
+    color: '#6EE7B7',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  incomeText: {
+    color: colors.success,
+  },
+  expenseText: {
+    color: '#EF4444',
+  },
+  actionBar: {
+    marginBottom: 10,
+  },
+  materializeButton: {
+    backgroundColor: colors.accent,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  materializeButtonText: {
+    color: colors.textOnAccent,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  newRuleButton: {
+    backgroundColor: colors.success,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  newRuleButtonText: {
+    color: colors.textOnAccent,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  listContainer: {
+    flex: 1,
+  },
+  emptyContainer: {
+    padding: 30,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: colors.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  occurrenceCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  occurrenceLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  categoryIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  categoryIconText: {
+    color: colors.textOnAccent,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  occurrenceMeta: {
+    flex: 1,
+  },
+  occurrenceDescription: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  occurrenceSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  occurrenceRight: {
+    alignItems: 'flex-end',
+  },
+  occurrenceAmount: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  confirmButton: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  confirmButtonText: {
+    color: colors.textOnAccent,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  clearedPill: {
+    backgroundColor: '#064E3B',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  clearedPillText: {
+    color: '#A7F3D0',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  ruleCard: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ruleHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ruleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  ruleMeta: {
+    flex: 1,
+  },
+  ruleDescription: {
+    color: colors.textPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  ruleSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  ruleAmount: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  ruleActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 8,
+  },
+  ruleActionEdit: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: colors.border,
+    borderRadius: 6,
+  },
+  ruleActionEditText: {
+    color: colors.accentSoft,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  ruleActionDelete: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    backgroundColor: '#451A1A',
+    borderRadius: 6,
+  },
+  ruleActionDeleteText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: colors.surfaceElevated,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '90%',
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  inputLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 4,
+    marginTop: 10,
+  },
+  textInput: {
+    backgroundColor: colors.surface,
+    color: colors.textPrimary,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalTypeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  modalTypePill: {
+    flex: 1,
+    paddingVertical: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalTypePillActive: {
+    backgroundColor: colors.accent,
+    borderColor: '#6366F1',
+  },
+  modalTypePillText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  modalTypePillTextActive: {
+    color: colors.textOnAccent,
+  },
+  rowInputs: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  colInput: {
+    flex: 1,
+  },
+  freqToggleRow: {
+    flexDirection: 'row',
+    height: 42,
+    backgroundColor: colors.surface,
+    borderRadius: 8,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  freqButton: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 6,
+  },
+  freqButtonActive: {
+    backgroundColor: colors.accent,
+  },
+  freqButtonText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  freqButtonTextActive: {
+    color: colors.textOnAccent,
+  },
+  pickerScroll: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  choicePill: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  choicePillActive: {
+    backgroundColor: colors.accent,
+    borderColor: '#6366F1',
+  },
+  choicePillText: {
+    color: colors.textMuted,
+    fontSize: 12,
+  },
+  choicePillTextActive: {
+    color: colors.textOnAccent,
+    fontWeight: '700',
+  },
+  ownerPickerRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 16,
+  },
+  modalButtonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 24,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: colors.border,
+    alignItems: 'center',
+  },
+  modalCancelButtonText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalSaveButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+  },
+  modalSaveButtonText: {
+    color: colors.textOnAccent,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+})

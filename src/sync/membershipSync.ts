@@ -1,4 +1,3 @@
-import * as Crypto from 'expo-crypto';
 import { getSupabaseClient } from '@/auth/supabaseClient';
 import {
   type AppDatabase,
@@ -9,7 +8,13 @@ import {
 } from '@/data';
 import type { HouseholdMemberRole } from '@/data/schema';
 import { useSessionUIStore } from '@/store/sessionUI';
+import { logger } from '@/utils/logger';
 
+/**
+ * Pulls household + active members from Supabase into local SQLite.
+ * Does NOT invent offline placeholder members or generic "Nosso Lar" rows —
+ * those must come from create/accept onboarding or a prior successful sync.
+ */
 export async function syncHouseholdMembers(
   targetDb?: AppDatabase | null,
   targetHouseholdId?: string | null,
@@ -25,7 +30,6 @@ export async function syncHouseholdMembers(
   try {
     const client = getSupabaseClient();
 
-    // 1. Fetch household info if available
     const { data: householdRow } = await client
       .from('households')
       .select('id, name, sync_epoch')
@@ -40,51 +44,35 @@ export async function syncHouseholdMembers(
       });
     }
 
-    // 2. Fetch all active members in the household
     const { data: members, error } = await client
       .from('household_members')
       .select('id, household_id, user_id, display_name, role, color_hex')
       .eq('household_id', householdId)
       .is('revoked_at', null);
 
-    if (!error && Array.isArray(members) && members.length > 0) {
-      for (const m of members) {
-        upsertLocalHouseholdMember(db, {
-          id: m.id,
-          householdId: m.household_id,
-          userId: m.user_id,
-          displayName: m.display_name,
-          role: m.role as HouseholdMemberRole,
-          colorHex: m.color_hex,
-        });
-      }
-      notifyDatabaseChange('accounts');
+    if (error) {
+      logger.warn('membership sync query failed', { reason: error.message });
       return;
     }
-  } catch {
-    // Transient network/offline error - fall through to offline guarantee
-  }
 
-  // 3. Fallback / offline guarantee: ensure at least the logged-in user exists locally
-  if (store.userId) {
-    try {
-      upsertLocalHousehold(db, {
-        id: householdId,
-        name: 'Nosso Lar',
-        syncEpoch: 1,
-      });
-
-      upsertLocalHouseholdMember(db, {
-        id: Crypto.randomUUID(),
-        householdId,
-        userId: store.userId,
-        displayName: store.userEmail ? store.userEmail.split('@')[0] : 'Eu',
-        role: store.memberRole ?? 'FOUNDER',
-        colorHex: '#4F46E5',
-      });
-      notifyDatabaseChange('accounts');
-    } catch {
-      // Ignored if member already exists
+    if (!Array.isArray(members) || members.length === 0) {
+      return;
     }
+
+    for (const m of members) {
+      upsertLocalHouseholdMember(db, {
+        id: m.id,
+        householdId: m.household_id,
+        userId: m.user_id,
+        displayName: m.display_name,
+        role: m.role as HouseholdMemberRole,
+        colorHex: m.color_hex,
+      });
+    }
+    notifyDatabaseChange('accounts');
+  } catch (err) {
+    logger.warn('membership sync skipped (offline or transient)', {
+      reason: err instanceof Error ? err.message : 'unknown',
+    });
   }
 }

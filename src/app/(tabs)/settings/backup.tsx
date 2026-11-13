@@ -9,7 +9,13 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { getActiveDatabase, useReactiveQuery } from '@/data';
+import {
+  getGoogleAccessTokenSilently,
+  mapGoogleSignInError,
+  signInWithGoogleForDrive,
+  signOutGoogle,
+} from '@/auth/googleAuth';
+import { useActiveDatabase, useReactiveQuery } from '@/data';
 import * as schema from '@/data/schema';
 import { useSessionUIStore } from '@/store';
 import {
@@ -33,15 +39,17 @@ import {
   uploadBackupToDrive,
   type DriveFileMetadata,
 } from '@/sync/googleDriveClient';
+import { logger } from '@/utils/logger';
 
 export default function BackupSettingsScreen() {
   const activeHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
-  const db = getActiveDatabase();
+  const db = useActiveDatabase();
 
   const [hasStoredPassphrase, setHasStoredPassphrase] = useState<boolean>(false);
   const [passphraseInput, setPassphraseInput] = useState<string>('');
   const [isEditingPassphrase, setIsEditingPassphrase] = useState<boolean>(false);
   const [googleAccessToken, setGoogleAccessToken] = useState<string>('');
+  const [googleEmail, setGoogleEmail] = useState<string | null>(null);
 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -73,8 +81,47 @@ export default function BackupSettingsScreen() {
         setHasStoredPassphrase(false);
       }
     }
+    async function hydrateGoogleSession() {
+      try {
+        const token = await getGoogleAccessTokenSilently();
+        if (token) {
+          setGoogleAccessToken(token);
+        }
+      } catch (err) {
+        logger.warn('Silent Google token refresh skipped', {
+          reason: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
     void checkPassphrase();
+    void hydrateGoogleSession();
   }, []);
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMessage(null);
+      const result = await signInWithGoogleForDrive();
+      setGoogleAccessToken(result.accessToken);
+      setGoogleEmail(result.email);
+      setStatusMessage(
+        result.email
+          ? `Google conectado: ${result.email}`
+          : 'Google conectado com sucesso.',
+      );
+    } catch (err: unknown) {
+      setErrorMessage(mapGoogleSignInError(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignOut = async () => {
+    await signOutGoogle();
+    setGoogleAccessToken('');
+    setGoogleEmail(null);
+    setStatusMessage('Sessão Google encerrada neste aparelho.');
+  };
 
   const handleSavePassphrase = async () => {
     if (!passphraseInput || passphraseInput.trim().length < 8) {
@@ -160,7 +207,7 @@ export default function BackupSettingsScreen() {
         setStatusMessage(`Backup concluído e sincronizado com o Drive: ${filename}`);
       } else {
         setStatusMessage(
-          `Backup criptografado gerado com sucesso localmente: ${filename} (${envelope.length} bytes). Para enviar à nuvem, insira o token Google.`,
+          `Backup criptografado gerado localmente: ${filename} (${envelope.length} bytes). Conecte o Google para enviar ao Drive.`,
         );
       }
     } catch (err: unknown) {
@@ -178,7 +225,7 @@ export default function BackupSettingsScreen() {
       return;
     }
     if (!googleAccessToken) {
-      setErrorMessage('Insira o token de acesso do Google para sincronizar a agenda.');
+      setErrorMessage('Conecte sua conta Google para sincronizar a agenda.');
       return;
     }
 
@@ -218,7 +265,7 @@ export default function BackupSettingsScreen() {
 
   const handleListDriveBackups = async () => {
     if (!googleAccessToken) {
-      setErrorMessage('Informe o token de acesso do Google.');
+      setErrorMessage('Conecte sua conta Google para listar backups no Drive.');
       return;
     }
 
@@ -380,21 +427,44 @@ export default function BackupSettingsScreen() {
         )}
       </View>
 
-      {/* Google Services Token & Actions */}
+      {/* Google Sign-In & Actions */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Integração Google REST (v3)</Text>
         <Text style={styles.description}>
-          Conexão direta via REST fetch com Bearer Token (sem pacote node `googleapis`).
+          Login com @react-native-google-signin e fetch nativo nas APIs Drive /
+          Calendar (sem pacote Node `googleapis`).
         </Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Google OAuth Access Token (opcional para teste local)"
-          placeholderTextColor="#94A3B8"
-          value={googleAccessToken}
-          onChangeText={setGoogleAccessToken}
-          autoCapitalize="none"
-        />
+        {googleAccessToken ? (
+          <View style={styles.rowBetween}>
+            <Text style={styles.infoText}>
+              {googleEmail
+                ? `Conectado: ${googleEmail}`
+                : 'Google conectado neste aparelho'}
+            </Text>
+            <Pressable
+              style={[styles.button, styles.buttonDanger]}
+              onPress={() => {
+                void handleGoogleSignOut();
+              }}
+              disabled={isLoading}
+              testID="backup-google-signout"
+            >
+              <Text style={styles.buttonTextDanger}>Desconectar</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            style={[styles.button, styles.buttonAccent]}
+            onPress={() => {
+              void handleGoogleSignIn();
+            }}
+            disabled={isLoading}
+            testID="backup-google-signin"
+          >
+            <Text style={styles.buttonText}>Entrar com Google</Text>
+          </Pressable>
+        )}
 
         <View style={styles.buttonStack}>
           <Pressable

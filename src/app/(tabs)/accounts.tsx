@@ -3,12 +3,15 @@ import { and, eq, isNull } from 'drizzle-orm';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { CurrencyInput } from '@/components/CurrencyInput';
+import { SessionGateBanner } from '@/components/SessionGateBanner';
 import type { AccountType, OwnershipFilter } from '@/core';
 import {
   type AccountRow,
@@ -17,17 +20,16 @@ import {
   computeAccountsWithBalances,
   createAccount,
   generateUuidV4,
-  getActiveDatabase,
   householdMembers,
   softDeleteAccount,
   transactions,
   updateAccount,
+  useActiveDatabase,
   useReactiveQuery,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
-  parseCurrencyInputToCents,
   useFiltersStore,
   useSessionUIStore,
 } from '@/store';
@@ -54,7 +56,7 @@ export default function AccountsScreen({
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
 
   const { data: accountRows } = useReactiveQuery(
@@ -147,6 +149,7 @@ export default function AccountsScreen({
     [accountsWithBalances],
   );
 
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<AccountRow | null>(null);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('CHECKING');
@@ -165,6 +168,16 @@ export default function AccountsScreen({
     setErrorMessage(null);
   };
 
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
   const handleEditSelect = (account: AccountRow) => {
     setEditingAccount(account);
     setName(account.name);
@@ -173,6 +186,7 @@ export default function AccountsScreen({
     setOwnerUserId(account.ownerUserId);
     setIncludeInNetWorth(account.includeInNetWorth);
     setErrorMessage(null);
+    setIsFormOpen(true);
   };
 
   const handleSaveAccount = () => {
@@ -208,7 +222,7 @@ export default function AccountsScreen({
           isArchived: false,
         });
       }
-      resetForm();
+      closeForm();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Erro ao salvar conta.',
@@ -221,7 +235,7 @@ export default function AccountsScreen({
     try {
       softDeleteAccount(db, accountId);
       if (editingAccount?.id === accountId) {
-        resetForm();
+        closeForm();
       }
     } catch (err) {
       setErrorMessage(
@@ -258,6 +272,8 @@ export default function AccountsScreen({
 
   return (
     <View style={styles.container} testID="accounts-screen">
+      <SessionGateBanner />
+
       {/* Resumo de Saldo & Filtro de Titularidade */}
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>Saldo nas Contas Visíveis</Text>
@@ -284,108 +300,121 @@ export default function AccountsScreen({
             ),
           )}
         </View>
+
+        <Pressable
+          testID="open-create-account-button"
+          style={styles.addButton}
+          onPress={openCreateForm}
+        >
+          <Text style={styles.addButtonText}>+ Nova Conta / Carteira</Text>
+        </Pressable>
       </View>
 
-      {/* Formulário de Criação / Edição de Conta */}
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>
-          {editingAccount ? 'Editar Conta' : 'Nova Conta / Carteira'}
-        </Text>
+      <BottomSheetModal
+        visible={isFormOpen}
+        onClose={closeForm}
+        testID="account-form-sheet"
+        closeTestID="cancel-edit-account-button"
+        title={editingAccount ? 'Editar Conta' : 'Nova Conta / Carteira'}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {errorMessage ? (
+            <View style={styles.errorBanner} testID="accounts-error-banner">
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
-        {errorMessage ? (
-          <View style={styles.errorBanner} testID="accounts-error-banner">
-            <Text style={styles.errorText}>{errorMessage}</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              testID="account-name-input"
+              style={[styles.input, { flex: 2 }]}
+              value={name}
+              onChangeText={setName}
+              placeholder="Nome (ex.: Itaú Conjunta)"
+              placeholderTextColor="#64748B"
+            />
+            <CurrencyInput
+              testID="account-initial-balance-input"
+              style={[styles.input, { flex: 1 }]}
+              valueCents={initialBalanceCents}
+              onChangeCents={setInitialBalanceCents}
+              placeholder="Saldo R$"
+            />
           </View>
-        ) : null}
 
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="account-name-input"
-            style={[styles.input, { flex: 2 }]}
-            value={name}
-            onChangeText={setName}
-            placeholder="Nome (ex.: Itaú Conjunta)"
-            placeholderTextColor="#64748B"
-          />
-          <CurrencyInput
-            testID="account-initial-balance-input"
-            style={[styles.input, { flex: 1 }]}
-            valueCents={initialBalanceCents}
-            onChangeCents={setInitialBalanceCents}
-            placeholder="Saldo R$"
-          />
-        </View>
-
-        <View style={styles.chipRow}>
-          {ACCOUNT_TYPES.map((t) => {
-            const active = type === t.value;
-            return (
-              <Pressable
-                key={t.value}
-                testID={`account-type-${t.value}`}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setType(t.value)}
-              >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextActive]}
+          <View style={styles.chipRow}>
+            {ACCOUNT_TYPES.map((t) => {
+              const active = type === t.value;
+              return (
+                <Pressable
+                  key={t.value}
+                  testID={`account-type-${t.value}`}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setType(t.value)}
                 >
-                  {t.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
+                  >
+                    {t.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        <View style={styles.chipRow}>
-          <Pressable
-            testID="account-owner-DOMESTIC"
-            style={[styles.chip, ownerUserId === null && styles.chipActive]}
-            onPress={() => setOwnerUserId(null)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                ownerUserId === null && styles.chipTextActive,
-              ]}
+          <View style={styles.chipRow}>
+            <Pressable
+              testID="account-owner-DOMESTIC"
+              style={[styles.chip, ownerUserId === null && styles.chipActive]}
+              onPress={() => setOwnerUserId(null)}
             >
-              Casa (Conjunta)
-            </Text>
-          </Pressable>
-          {effectiveMembers.map((m) => {
-            const active = ownerUserId === m.userId;
-            const isMe = m.userId === sessionUserId;
-            return (
-              <Pressable
-                key={m.id}
-                testID={`account-owner-${m.userId}`}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setOwnerUserId(m.userId)}
+              <Text
+                style={[
+                  styles.chipText,
+                  ownerUserId === null && styles.chipTextActive,
+                ]}
               >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextActive]}
+                Casa (Conjunta)
+              </Text>
+            </Pressable>
+            {effectiveMembers.map((m) => {
+              const active = ownerUserId === m.userId;
+              const isMe = m.userId === sessionUserId;
+              return (
+                <Pressable
+                  key={m.id}
+                  testID={`account-owner-${m.userId}`}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setOwnerUserId(m.userId)}
                 >
-                  Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
-                </Text>
-              </Pressable>
-            );
-          })}
-          <Pressable
-            testID="account-networth-toggle"
-            style={[styles.chip, includeInNetWorth && styles.chipActive]}
-            onPress={() => setIncludeInNetWorth((v) => !v)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                includeInNetWorth && styles.chipTextActive,
-              ]}
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
+                  >
+                    Pessoal ({m.displayName}
+                    {isMe ? ' - Você' : ''})
+                  </Text>
+                </Pressable>
+              );
+            })}
+            <Pressable
+              testID="account-networth-toggle"
+              style={[styles.chip, includeInNetWorth && styles.chipActive]}
+              onPress={() => setIncludeInNetWorth((v) => !v)}
             >
-              {includeInNetWorth ? '✓ Soma Património' : 'Fora do Património'}
-            </Text>
-          </Pressable>
-        </View>
+              <Text
+                style={[
+                  styles.chipText,
+                  includeInNetWorth && styles.chipTextActive,
+                ]}
+              >
+                {includeInNetWorth ? '✓ Soma Património' : 'Fora do Património'}
+              </Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.actionRow}>
           <Pressable
             testID="save-account-button"
             style={styles.primaryButton}
@@ -395,17 +424,8 @@ export default function AccountsScreen({
               {editingAccount ? 'Atualizar Conta' : 'Adicionar Conta'}
             </Text>
           </Pressable>
-          {editingAccount ? (
-            <Pressable
-              testID="cancel-edit-account-button"
-              style={styles.secondaryButton}
-              onPress={resetForm}
-            >
-              <Text style={styles.secondaryButtonText}>Cancelar</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+        </ScrollView>
+      </BottomSheetModal>
 
       {/* Lista Reativa de Contas via FlashList */}
       <View style={styles.listWrapper}>
@@ -521,19 +541,17 @@ const styles = StyleSheet.create({
   filterChipTextActive: {
     color: '#FFFFFF',
   },
-  formCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
+  addButton: {
+    marginTop: 12,
+    backgroundColor: '#4F46E5',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
   },
-  formTitle: {
-    color: '#F8FAFC',
-    fontSize: 15,
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 10,
   },
   errorBanner: {
     backgroundColor: '#3F1D2E',

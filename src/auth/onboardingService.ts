@@ -265,6 +265,7 @@ export async function handleRevocationOrForbidden(options: {
     db: options.db,
     adapter: options.keyStoreAdapter,
   });
+  // markRevokedAndHalted already cleared dbReady + household persistence
 
   const gateway = options.gateway ?? getOnboardingGateway();
   try {
@@ -377,12 +378,17 @@ export async function loginWithEmailPassword(params: {
       params.password,
     );
     const membership = await gateway.fetchActiveMembership().catch(() => null);
+    // Keep existing / persisted household when online membership lookup fails (offline)
     store.setSession(
       {
         userId: session.userId,
         userEmail: session.email,
-        activeHouseholdId: membership?.householdId ?? null,
-        memberRole: membership?.role ?? null,
+        ...(membership
+          ? {
+              activeHouseholdId: membership.householdId,
+              memberRole: membership.role,
+            }
+          : {}),
       },
       { lockBiometricsOnRestore: false },
     );
@@ -637,5 +643,21 @@ export async function revokePartnerAccess(params: {
   } catch (err) {
     const mapped = mapOnboardingRpcError(err);
     throw new Error(mapped.userMessage);
+  }
+}
+
+/**
+ * Signs out of Supabase Auth and clears ephemeral session UI (keeps encrypted local vault).
+ */
+export async function logoutCurrentUser(options: {
+  gateway?: OnboardingBackendGateway;
+} = {}): Promise<void> {
+  const gateway = options.gateway ?? getOnboardingGateway();
+  const store = useSessionUIStore.getState();
+  try {
+    await gateway.signOut();
+  } finally {
+    store.setSession(null);
+    store.setDbStatus({ ready: false, error: null });
   }
 }

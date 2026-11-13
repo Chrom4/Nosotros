@@ -8,18 +8,22 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
-  handleAppStateTransition,
+  handleAppStateTransitionAsync,
   promptBiometricUnlock,
 } from '@/auth/biometricGuard';
+import { getBiometricsEnabled } from '@/auth/devicePreferences';
+import { ensureLocalSessionReady } from '@/auth/localSession';
 import { restoreSessionOnLaunch } from '@/auth/onboardingService';
-import { openEncryptedDatabase } from '@/data';
-import { syncHouseholdMembers } from '@/sync/membershipSync';
+import { loadPersistedHouseholdContext } from '@/store/householdPersistence';
 import { useSessionUIStore } from '@/store/sessionUI';
+import { logger } from '@/utils/logger';
 
 export default function RootLayout() {
   const authStatus = useSessionUIStore((s) => s.authStatus);
   const isBiometricLocked = useSessionUIStore((s) => s.isBiometricLocked);
+  const dbError = useSessionUIStore((s) => s.dbError);
   const [unlockError, setUnlockError] = useState<string | null>(null);
   const [unlocking, setUnlocking] = useState(false);
 
@@ -40,25 +44,41 @@ export default function RootLayout() {
 
   useEffect(() => {
     let mounted = true;
-    restoreSessionOnLaunch()
-      .then(async (res) => {
-        if (mounted && res.authenticated) {
-          try {
-            await openEncryptedDatabase();
-            if (res.householdId) {
-              void syncHouseholdMembers();
-            }
-          } catch (e) {
-            console.warn('Database initialization on launch:', e);
-          }
-          void triggerUnlock();
+    (async () => {
+      try {
+        const persisted = await loadPersistedHouseholdContext();
+        if (persisted.householdId) {
+          useSessionUIStore
+            .getState()
+            .setHouseholdContext(persisted.householdId, persisted.memberRole);
         }
-      })
-      .catch(() => {
+
+        const res = await restoreSessionOnLaunch({
+          knownHouseholdId: persisted.householdId,
+        });
+        if (!mounted) return;
+
+        if (res.authenticated) {
+          try {
+            await ensureLocalSessionReady();
+          } catch (e) {
+            logger.warn('Database initialization on launch failed', {
+              reason: e instanceof Error ? e.message : 'unknown',
+            });
+          }
+          const biometricsOn = await getBiometricsEnabled();
+          if (biometricsOn) {
+            void triggerUnlock();
+          } else {
+            useSessionUIStore.getState().unlockBiometrics();
+          }
+        }
+      } catch {
         if (mounted) {
           useSessionUIStore.getState().setSession(null);
         }
-      });
+      }
+    })();
 
     return () => {
       mounted = false;
@@ -67,10 +87,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
-      const lockedAfterResume = handleAppStateTransition(nextState, Date.now());
-      if (nextState === 'active' && lockedAfterResume) {
-        void triggerUnlock();
-      }
+      void (async () => {
+        const lockedAfterResume = await handleAppStateTransitionAsync(
+          nextState,
+          Date.now(),
+        );
+        if (nextState === 'active' && lockedAfterResume) {
+          void triggerUnlock();
+        }
+      })();
     });
 
     return () => {
@@ -83,6 +108,11 @@ export default function RootLayout() {
       <View style={styles.centerContainer} testID="auth-initializing-screen">
         <ActivityIndicator size="large" color="#4F46E5" />
         <Text style={styles.loadingText}>Carregando cofre criptografado...</Text>
+        {dbError ? (
+          <Text style={styles.errorText} testID="db-init-error">
+            {dbError}
+          </Text>
+        ) : null}
       </View>
     );
   }
@@ -118,7 +148,11 @@ export default function RootLayout() {
     );
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <SafeAreaProvider>
+      <Stack screenOptions={{ headerShown: false }} />
+    </SafeAreaProvider>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -162,6 +196,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 16,
+    marginTop: 8,
   },
   unlockButton: {
     backgroundColor: '#4F46E5',

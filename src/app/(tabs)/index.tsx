@@ -10,22 +10,13 @@ import { BudgetBar } from '@/components/BudgetBar';
 import { ContextPills } from '@/components/ContextPills';
 import { ContributionCard } from '@/components/ContributionCard';
 import { NetWorthChart } from '@/components/NetWorthChart';
-import { TransactionQuickModal } from '@/components/TransactionQuickModal';
 import {
-  type AccountRow,
-  accounts,
   type AppDatabase,
-  categories,
-  type CategoryRow,
-  getActiveDatabase,
   getDashboardAggregates,
-  householdMembers,
-  type HouseholdMemberRow,
   subscribeToDatabaseChanges,
+  useActiveDatabase,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
-import { and, eq, isNull } from 'drizzle-orm';
-
 import {
   formatCentsToBrl,
   useFiltersStore,
@@ -68,7 +59,6 @@ export default function DashboardScreen({
 }: DashboardScreenProps = {}) {
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
-  const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
@@ -76,7 +66,7 @@ export default function DashboardScreen({
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
   const openQuickModal = useFiltersStore((s) => s.openQuickModal);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
   const currentUserId = propCurrentUserId ?? sessionUserId;
 
@@ -132,68 +122,6 @@ export default function DashboardScreen({
     expenseCents: 0,
     netSavingsCents: 0,
   };
-
-  const accountRows = useMemo<AccountRow[]>(() => {
-    if (!db || !householdId || dbRevision < 0) return [];
-    return db
-      .select()
-      .from(accounts)
-      .where(
-        and(eq(accounts.householdId, householdId), isNull(accounts.deletedAt)),
-      )
-      .all();
-  }, [db, householdId, dbRevision]);
-
-  const categoryRows = useMemo<CategoryRow[]>(() => {
-    if (!db || !householdId || dbRevision < 0) return [];
-    return db
-      .select()
-      .from(categories)
-      .where(
-        and(
-          eq(categories.householdId, householdId),
-          isNull(categories.deletedAt),
-        ),
-      )
-      .all();
-  }, [db, householdId, dbRevision]);
-
-  const memberRows = useMemo<HouseholdMemberRow[]>(() => {
-    if (!db || !householdId || dbRevision < 0) return [];
-    return db
-      .select()
-      .from(householdMembers)
-      .where(
-        and(
-          eq(householdMembers.householdId, householdId),
-          isNull(householdMembers.revokedAt),
-        ),
-      )
-      .all();
-  }, [db, householdId, dbRevision]);
-
-  const effectiveMembers = useMemo(() => {
-    if (memberRows && memberRows.length > 0) {
-      return memberRows;
-    }
-    if (sessionUserId) {
-      return [
-        {
-          id: 'me',
-          householdId: householdId ?? '',
-          userId: sessionUserId,
-          displayName: sessionUserEmail
-            ? sessionUserEmail.split('@')[0]
-            : 'Você',
-          role: 'FOUNDER' as const,
-          colorHex: '#4F46E5',
-          joinedAt: new Date().toISOString(),
-          revokedAt: null,
-        },
-      ];
-    }
-    return [];
-  }, [memberRows, sessionUserId, sessionUserEmail, householdId]);
 
   return (
     <View style={[styles.root, { backgroundColor: theme.surface }]}>
@@ -401,15 +329,6 @@ export default function DashboardScreen({
       >
         <Text style={[styles.fabText, { color: theme.onPrimary }]}>+</Text>
       </Pressable>
-
-      <TransactionQuickModal
-        db={db}
-        householdId={householdId}
-        currentUserId={currentUserId}
-        accounts={accountRows}
-        categories={categoryRows}
-        members={effectiveMembers}
-      />
     </View>
   );
 }

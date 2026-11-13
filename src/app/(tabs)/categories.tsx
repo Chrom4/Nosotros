@@ -9,6 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from '@/components/BottomSheetModal';
+import { SessionGateBanner } from '@/components/SessionGateBanner';
 import {
   type AppDatabase,
   categories,
@@ -17,10 +19,10 @@ import {
   createCategory,
   flattenCategoryTree,
   generateUuidV4,
-  getActiveDatabase,
   seedDefaultCategories,
   softDeleteCategory,
   updateCategory,
+  useActiveDatabase,
   useReactiveQuery,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
@@ -75,7 +77,7 @@ export default function CategoriesScreen({
   const selectedKind = useFiltersStore((s) => s.selectedCategoryKind);
   const setSelectedKind = useFiltersStore((s) => s.setSelectedCategoryKind);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
 
   useEffect(() => {
@@ -117,6 +119,7 @@ export default function CategoriesScreen({
     [categoryRows, selectedKind],
   );
 
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryRow | null>(
     null,
   );
@@ -135,9 +138,20 @@ export default function CategoriesScreen({
     setErrorMessage(null);
   };
 
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
+  const openCreateForm = (nextParentId: string | null = null) => {
+    resetForm();
+    setParentId(nextParentId);
+    setIsFormOpen(true);
+  };
+
   const handleSelectKind = (kind: CategoryKind) => {
     setSelectedKind(kind);
-    resetForm();
+    closeForm();
   };
 
   const handleEditSelect = (row: CategoryRow) => {
@@ -147,6 +161,7 @@ export default function CategoriesScreen({
     setColorHex(row.colorHex);
     setIconName(row.iconName);
     setErrorMessage(null);
+    setIsFormOpen(true);
   };
 
   const handleSaveCategory = () => {
@@ -180,7 +195,7 @@ export default function CategoriesScreen({
           iconName: iconName.trim() || 'tag',
         });
       }
-      resetForm();
+      closeForm();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Erro ao salvar categoria.',
@@ -193,7 +208,7 @@ export default function CategoriesScreen({
     try {
       softDeleteCategory(db, categoryId);
       if (editingCategory?.id === categoryId) {
-        resetForm();
+        closeForm();
       }
     } catch (err) {
       setErrorMessage(
@@ -217,6 +232,8 @@ export default function CategoriesScreen({
 
   return (
     <View style={styles.container} testID="categories-screen">
+      <SessionGateBanner />
+
       {/* Seletor de Tipo (Despesas / Receitas) */}
       <View style={styles.kindRow}>
         {(['EXPENSE', 'INCOME'] as const).map((k) => {
@@ -238,131 +255,157 @@ export default function CategoriesScreen({
         })}
       </View>
 
-      {/* Formulário Hierárquico (Categoria Raiz / Subcategoria) */}
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>
-          {editingCategory
+      <View style={styles.toolbarRow}>
+        <Pressable
+          testID="open-create-category-button"
+          style={styles.addButton}
+          onPress={() => openCreateForm(null)}
+        >
+          <Text style={styles.addButtonText}>+ Nova Categoria</Text>
+        </Pressable>
+        {categoryRows.length === 0 ? (
+          <Pressable
+            testID="seed-default-categories-button"
+            style={styles.secondaryButton}
+            onPress={handleSeedDefaults}
+          >
+            <Text style={styles.secondaryButtonText}>
+              Criar Categorias Padrão
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <BottomSheetModal
+        visible={isFormOpen}
+        onClose={closeForm}
+        testID="category-form-sheet"
+        title={
+          editingCategory
             ? 'Editar Categoria'
             : parentId
               ? 'Nova Subcategoria'
-              : 'Nova Categoria Principal (Raiz)'}
-        </Text>
-
-        {errorMessage ? (
-          <View style={styles.errorBanner} testID="categories-error-banner">
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="category-name-input"
-            style={[styles.input, { flex: 2 }]}
-            value={name}
-            onChangeText={setName}
-            placeholder="Nome (ex.: Alimentação ou Mercado)"
-            placeholderTextColor="#64748B"
-          />
-          <TextInput
-            testID="category-icon-input"
-            style={[styles.input, { flex: 1 }]}
-            value={iconName}
-            onChangeText={setIconName}
-            placeholder="ID Ícone"
-            placeholderTextColor="#64748B"
-          />
-        </View>
-
-        <Text style={styles.subLabel}>Selecione um Ícone:</Text>
+              : 'Nova Categoria Principal (Raiz)'
+        }
+      >
         <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.iconGridScroll}
-          contentContainerStyle={styles.iconGridContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {POPULAR_CATEGORY_ICONS.map((item) => {
-            const isSelected = iconName === item.id;
-            return (
-              <Pressable
-                key={item.id}
-                style={[
-                  styles.iconBadge,
-                  isSelected && styles.iconBadgeSelected,
-                ]}
-                onPress={() => setIconName(item.id)}
-              >
-                <Text style={styles.iconEmoji}>{item.emoji}</Text>
-                <Text
-                  style={[
-                    styles.iconBadgeLabel,
-                    isSelected && styles.iconBadgeLabelSelected,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          {errorMessage ? (
+            <View style={styles.errorBanner} testID="categories-error-banner">
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
-        <Text style={styles.subLabel}>Hierarquia (Categoria Pai):</Text>
-        <View style={styles.chipRow}>
-          <Pressable
-            testID="category-parent-NONE"
-            style={[styles.chip, parentId === null && styles.chipActive]}
-            onPress={() => setParentId(null)}
+          <View style={styles.inputRow}>
+            <TextInput
+              testID="category-name-input"
+              style={[styles.input, { flex: 2 }]}
+              value={name}
+              onChangeText={setName}
+              placeholder="Nome (ex.: Alimentação ou Mercado)"
+              placeholderTextColor="#64748B"
+            />
+            <TextInput
+              testID="category-icon-input"
+              style={[styles.input, { flex: 1 }]}
+              value={iconName}
+              onChangeText={setIconName}
+              placeholder="ID Ícone"
+              placeholderTextColor="#64748B"
+            />
+          </View>
+
+          <Text style={styles.subLabel}>Selecione um Ícone:</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.iconGridScroll}
+            contentContainerStyle={styles.iconGridContent}
           >
-            <Text
-              style={[
-                styles.chipText,
-                parentId === null && styles.chipTextActive,
-              ]}
-            >
-              Principal (Sem Pai / Raiz)
-            </Text>
-          </Pressable>
-          {rootCategoriesForKind
-            .filter((root) => root.id !== editingCategory?.id)
-            .map((root) => {
-              const active = parentId === root.id;
+            {POPULAR_CATEGORY_ICONS.map((item) => {
+              const isSelected = iconName === item.id;
               return (
                 <Pressable
-                  key={root.id}
-                  testID={`category-parent-${root.id}`}
-                  style={[styles.chip, active && styles.chipActive]}
-                  onPress={() => setParentId(root.id)}
+                  key={item.id}
+                  style={[
+                    styles.iconBadge,
+                    isSelected && styles.iconBadgeSelected,
+                  ]}
+                  onPress={() => setIconName(item.id)}
                 >
+                  <Text style={styles.iconEmoji}>{item.emoji}</Text>
                   <Text
-                    style={[styles.chipText, active && styles.chipTextActive]}
+                    style={[
+                      styles.iconBadgeLabel,
+                      isSelected && styles.iconBadgeLabelSelected,
+                    ]}
+                    numberOfLines={1}
                   >
-                    ↳ {root.name}
+                    {item.label}
                   </Text>
                 </Pressable>
               );
             })}
-        </View>
+          </ScrollView>
 
-        <Text style={styles.subLabel}>Cor de Destaque:</Text>
-        <View style={styles.colorRow}>
-          {COLOR_SWATCHES.map((swatch) => {
-            const selected = colorHex.toUpperCase() === swatch.toUpperCase();
-            return (
-              <Pressable
-                key={swatch}
-                testID={`category-color-${swatch}`}
+          <Text style={styles.subLabel}>Hierarquia (Categoria Pai):</Text>
+          <View style={styles.chipRow}>
+            <Pressable
+              testID="category-parent-NONE"
+              style={[styles.chip, parentId === null && styles.chipActive]}
+              onPress={() => setParentId(null)}
+            >
+              <Text
                 style={[
-                  styles.colorDot,
-                  { backgroundColor: swatch },
-                  selected && styles.colorDotSelected,
+                  styles.chipText,
+                  parentId === null && styles.chipTextActive,
                 ]}
-                onPress={() => setColorHex(swatch)}
-              />
-            );
-          })}
-        </View>
+              >
+                Principal (Sem Pai / Raiz)
+              </Text>
+            </Pressable>
+            {rootCategoriesForKind
+              .filter((root) => root.id !== editingCategory?.id)
+              .map((root) => {
+                const active = parentId === root.id;
+                return (
+                  <Pressable
+                    key={root.id}
+                    testID={`category-parent-${root.id}`}
+                    style={[styles.chip, active && styles.chipActive]}
+                    onPress={() => setParentId(root.id)}
+                  >
+                    <Text
+                      style={[styles.chipText, active && styles.chipTextActive]}
+                    >
+                      ↳ {root.name}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+          </View>
 
-        <View style={styles.actionRow}>
+          <Text style={styles.subLabel}>Cor de Destaque:</Text>
+          <View style={styles.colorRow}>
+            {COLOR_SWATCHES.map((swatch) => {
+              const selected = colorHex.toUpperCase() === swatch.toUpperCase();
+              return (
+                <Pressable
+                  key={swatch}
+                  testID={`category-color-${swatch}`}
+                  style={[
+                    styles.colorDot,
+                    { backgroundColor: swatch },
+                    selected && styles.colorDotSelected,
+                  ]}
+                  onPress={() => setColorHex(swatch)}
+                />
+              );
+            })}
+          </View>
+
           <Pressable
             testID="save-category-button"
             style={styles.primaryButton}
@@ -372,20 +415,8 @@ export default function CategoriesScreen({
               {editingCategory ? 'Atualizar Categoria' : 'Salvar Categoria'}
             </Text>
           </Pressable>
-
-          {categoryRows.length === 0 ? (
-            <Pressable
-              testID="seed-default-categories-button"
-              style={styles.secondaryButton}
-              onPress={handleSeedDefaults}
-            >
-              <Text style={styles.secondaryButtonText}>
-                Criar Categorias Padrão
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+        </ScrollView>
+      </BottomSheetModal>
 
       {/* Lista Hierárquica Reativa via FlashList */}
       <View style={styles.listWrapper}>
@@ -489,19 +520,22 @@ const styles = StyleSheet.create({
   kindTabTextActive: {
     color: '#FFFFFF',
   },
-  formCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+  toolbarRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 12,
   },
-  formTitle: {
-    color: '#F8FAFC',
-    fontSize: 15,
+  addButton: {
+    backgroundColor: '#4F46E5',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  addButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '700',
-    marginBottom: 10,
   },
   errorBanner: {
     backgroundColor: '#3F1D2E',

@@ -3,17 +3,19 @@ import { and, eq, isNull } from 'drizzle-orm';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
-  StyleSheet,
+  ScrollView,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from '@/components/BottomSheetModal';
 import { CurrencyInput } from '@/components/CurrencyInput';
 import type { OwnershipFilter } from '@/core';
 import {
   InstallmentEditor,
   type InstallmentEditorMode,
 } from '@/components/InstallmentEditor';
+import { SessionGateBanner } from '@/components/SessionGateBanner';
 import {
   accounts,
   type AppDatabase,
@@ -25,22 +27,22 @@ import {
   type CreditCardRow,
   creditCards,
   generateUuidV4,
-  getActiveDatabase,
   householdMembers,
   type InstallmentPlanWithSlices,
   installmentPlans,
   softDeleteCreditCard,
   transactions,
   updateCreditCard,
+  useActiveDatabase,
   useReactiveQuery,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
 import {
   formatCentsToBrl,
-  parseCurrencyInputToCents,
   useFiltersStore,
   useSessionUIStore,
 } from '@/store';
+import { styles } from './cards.styles';
 
 export interface CardsScreenProps {
   db?: AppDatabase | null;
@@ -59,7 +61,7 @@ export default function CardsScreen({
   const ownershipFilter = useFiltersStore((s) => s.ownershipFilter);
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
   const currentUserId = propCurrentUserId ?? sessionUserId;
 
@@ -248,6 +250,7 @@ export default function CardsScreen({
     [accountRows],
   );
 
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<CreditCardRow | null>(null);
   const [name, setName] = useState('');
   const [limitCents, setLimitCents] = useState(500000);
@@ -287,6 +290,16 @@ export default function CardsScreen({
     setErrorMessage(null);
   };
 
+  const closeForm = () => {
+    resetForm();
+    setIsFormOpen(false);
+  };
+
+  const openCreateForm = () => {
+    resetForm();
+    setIsFormOpen(true);
+  };
+
   const handleEditSelect = (card: CreditCardRow) => {
     setEditingCard(card);
     setName(card.name);
@@ -296,6 +309,7 @@ export default function CardsScreen({
     setOwnerUserId(card.ownerUserId);
     setDefaultPaymentAccountId(card.defaultPaymentAccountId);
     setErrorMessage(null);
+    setIsFormOpen(true);
   };
 
   const handleSaveCard = () => {
@@ -354,7 +368,7 @@ export default function CardsScreen({
           isArchived: false,
         });
       }
-      resetForm();
+      closeForm();
     } catch (err) {
       setErrorMessage(
         err instanceof Error ? err.message : 'Erro ao salvar cartão.',
@@ -367,7 +381,7 @@ export default function CardsScreen({
     try {
       softDeleteCreditCard(db, cardId);
       if (editingCard?.id === cardId) {
-        resetForm();
+        closeForm();
       }
     } catch (err) {
       setErrorMessage(
@@ -425,6 +439,8 @@ export default function CardsScreen({
 
   return (
     <View style={styles.container} testID="cards-screen">
+      <SessionGateBanner />
+
       {/* Resumo de Limites & Filtro de Titularidade */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryMetricsRow}>
@@ -487,116 +503,128 @@ export default function CardsScreen({
           >
             <Text style={styles.quickBtnSecondaryText}>+ Estorno</Text>
           </Pressable>
+          <Pressable
+            testID="open-create-card-button"
+            style={styles.quickBtn}
+            onPress={openCreateForm}
+          >
+            <Text style={styles.quickBtnText}>+ Novo Cartão</Text>
+          </Pressable>
         </View>
       </View>
 
-      {/* Formulário de Criação / Edição de Cartão */}
-      <View style={styles.formCard}>
-        <Text style={styles.formTitle}>
-          {editingCard ? 'Editar Cartão' : 'Novo Cartão de Crédito'}
-        </Text>
+      <BottomSheetModal
+        visible={isFormOpen}
+        onClose={closeForm}
+        testID="card-form-sheet"
+        closeTestID="cancel-edit-card-button"
+        title={editingCard ? 'Editar Cartão' : 'Novo Cartão de Crédito'}
+      >
+        <ScrollView
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {errorMessage ? (
+            <View style={styles.errorBanner} testID="cards-error-banner">
+              <Text style={styles.errorText}>{errorMessage}</Text>
+            </View>
+          ) : null}
 
-        {errorMessage ? (
-          <View style={styles.errorBanner} testID="cards-error-banner">
-            <Text style={styles.errorText}>{errorMessage}</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              testID="card-name-input"
+              style={[styles.input, { flex: 2 }]}
+              value={name}
+              onChangeText={setName}
+              placeholder="Nome (ex.: Nubank Ultravioleta)"
+              placeholderTextColor="#64748B"
+            />
+            <CurrencyInput
+              testID="card-limit-input"
+              style={[styles.input, { flex: 1 }]}
+              valueCents={limitCents}
+              onChangeCents={setLimitCents}
+              placeholder="Limite R$"
+            />
           </View>
-        ) : null}
 
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="card-name-input"
-            style={[styles.input, { flex: 2 }]}
-            value={name}
-            onChangeText={setName}
-            placeholder="Nome (ex.: Nubank Ultravioleta)"
-            placeholderTextColor="#64748B"
-          />
-          <CurrencyInput
-            testID="card-limit-input"
-            style={[styles.input, { flex: 1 }]}
-            valueCents={limitCents}
-            onChangeCents={setLimitCents}
-            placeholder="Limite R$"
-          />
-        </View>
+          <View style={styles.inputRow}>
+            <TextInput
+              testID="card-closing-day-input"
+              style={[styles.input, { flex: 1 }]}
+              value={closingDayInput}
+              onChangeText={setClosingDayInput}
+              placeholder="Dia Fech. (1..31)"
+              placeholderTextColor="#64748B"
+              keyboardType="number-pad"
+            />
+            <TextInput
+              testID="card-due-day-input"
+              style={[styles.input, { flex: 1 }]}
+              value={dueDayInput}
+              onChangeText={setDueDayInput}
+              placeholder="Dia Venc. (1..31)"
+              placeholderTextColor="#64748B"
+              keyboardType="number-pad"
+            />
+          </View>
 
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="card-closing-day-input"
-            style={[styles.input, { flex: 1 }]}
-            value={closingDayInput}
-            onChangeText={setClosingDayInput}
-            placeholder="Dia Fech. (1..31)"
-            placeholderTextColor="#64748B"
-            keyboardType="number-pad"
-          />
-          <TextInput
-            testID="card-due-day-input"
-            style={[styles.input, { flex: 1 }]}
-            value={dueDayInput}
-            onChangeText={setDueDayInput}
-            placeholder="Dia Venc. (1..31)"
-            placeholderTextColor="#64748B"
-            keyboardType="number-pad"
-          />
-        </View>
-
-        <View style={styles.chipRow}>
-          <Pressable
-            testID="card-owner-DOMESTIC"
-            style={[styles.chip, ownerUserId === null && styles.chipActive]}
-            onPress={() => setOwnerUserId(null)}
-          >
-            <Text
-              style={[
-                styles.chipText,
-                ownerUserId === null && styles.chipTextActive,
-              ]}
+          <View style={styles.chipRow}>
+            <Pressable
+              testID="card-owner-DOMESTIC"
+              style={[styles.chip, ownerUserId === null && styles.chipActive]}
+              onPress={() => setOwnerUserId(null)}
             >
-              Casa (Conjunta)
-            </Text>
-          </Pressable>
-          {effectiveMembers.map((m) => {
-            const active = ownerUserId === m.userId;
-            const isMe = m.userId === sessionUserId;
-            return (
-              <Pressable
-                key={m.id}
-                testID={`card-owner-${m.userId}`}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setOwnerUserId(m.userId)}
+              <Text
+                style={[
+                  styles.chipText,
+                  ownerUserId === null && styles.chipTextActive,
+                ]}
               >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextActive]}
+                Casa (Conjunta)
+              </Text>
+            </Pressable>
+            {effectiveMembers.map((m) => {
+              const active = ownerUserId === m.userId;
+              const isMe = m.userId === sessionUserId;
+              return (
+                <Pressable
+                  key={m.id}
+                  testID={`card-owner-${m.userId}`}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setOwnerUserId(m.userId)}
                 >
-                  Pessoal ({m.displayName}{isMe ? ' - Você' : ''})
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
+                  >
+                    Pessoal ({m.displayName}
+                    {isMe ? ' - Você' : ''})
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        <View style={styles.chipRow}>
-          {activeAccounts.map((acc) => {
-            const active = effectiveDefaultAccountId === acc.id;
-            return (
-              <Pressable
-                key={acc.id}
-                testID={`card-default-account-${acc.id}`}
-                style={[styles.chip, active && styles.chipActive]}
-                onPress={() => setDefaultPaymentAccountId(acc.id)}
-              >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextActive]}
+          <View style={styles.chipRow}>
+            {activeAccounts.map((acc) => {
+              const active = effectiveDefaultAccountId === acc.id;
+              return (
+                <Pressable
+                  key={acc.id}
+                  testID={`card-default-account-${acc.id}`}
+                  style={[styles.chip, active && styles.chipActive]}
+                  onPress={() => setDefaultPaymentAccountId(acc.id)}
                 >
-                  Débito Padrão: {acc.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
+                  >
+                    Débito Padrão: {acc.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
 
-        <View style={styles.actionRow}>
           <Pressable
             testID="save-card-button"
             style={styles.primaryButton}
@@ -606,17 +634,8 @@ export default function CardsScreen({
               {editingCard ? 'Atualizar Cartão' : 'Adicionar Cartão'}
             </Text>
           </Pressable>
-          {editingCard ? (
-            <Pressable
-              testID="cancel-edit-card-button"
-              style={styles.secondaryButton}
-              onPress={resetForm}
-            >
-              <Text style={styles.secondaryButtonText}>Cancelar</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
+        </ScrollView>
+      </BottomSheetModal>
 
       {/* Lista Reativa de Cartões e Parcelamentos Ativos */}
       <View style={styles.listWrapper}>
@@ -730,293 +749,3 @@ export default function CardsScreen({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0F172A',
-    padding: 16,
-  },
-  summaryCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
-  },
-  summaryMetricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  summaryRightBox: {
-    alignItems: 'flex-end',
-  },
-  summaryLabel: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  summaryValue: {
-    color: '#34D399',
-    fontSize: 20,
-    fontWeight: '800',
-    marginTop: 2,
-  },
-  usedLimitValue: {
-    color: '#FB7185',
-    fontSize: 16,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 10,
-  },
-  filterChip: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  filterChipActive: {
-    backgroundColor: '#4F46E5',
-    borderColor: '#6366F1',
-  },
-  filterChipText: {
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  filterChipTextActive: {
-    color: '#FFFFFF',
-  },
-  quickActionRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickBtn: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-    borderRadius: 8,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  quickBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickBtnSecondary: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#475569',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  quickBtnSecondaryText: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  formCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 12,
-  },
-  formTitle: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  errorBanner: {
-    backgroundColor: '#3F1D2E',
-    borderColor: '#F43F5E',
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
-  },
-  errorText: {
-    color: '#FDA4AF',
-    fontSize: 12,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
-  },
-  input: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#334155',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    color: '#F8FAFC',
-    fontSize: 13,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 6,
-  },
-  chip: {
-    backgroundColor: '#0F172A',
-    borderColor: '#334155',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  chipActive: {
-    backgroundColor: '#312E81',
-    borderColor: '#6366F1',
-  },
-  chipText: {
-    color: '#94A3B8',
-    fontSize: 11,
-  },
-  chipTextActive: {
-    color: '#E0E7FF',
-    fontWeight: '600',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: '#4F46E5',
-    borderRadius: 8,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    backgroundColor: '#0F172A',
-    borderWidth: 1,
-    borderColor: '#475569',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#CBD5E1',
-    fontSize: 13,
-  },
-  listWrapper: {
-    flex: 1,
-  },
-  cardItem: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    marginBottom: 8,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cardInfo: {
-    flex: 1,
-  },
-  cardName: {
-    color: '#F8FAFC',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cardMeta: {
-    color: '#94A3B8',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  cardRight: {
-    alignItems: 'flex-end',
-  },
-  availableText: {
-    color: '#A7F3D0',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  usedText: {
-    color: '#FDA4AF',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  plansSection: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
-  },
-  plansSectionTitle: {
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  planChip: {
-    backgroundColor: '#0F172A',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: '#4F46E5',
-  },
-  planChipText: {
-    color: '#E0E7FF',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  rowActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 6,
-  },
-  rowBtn: {
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-  },
-  editBtnText: {
-    color: '#818CF8',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  deleteBtnText: {
-    color: '#FB7185',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  emptyText: {
-    color: '#64748B',
-    textAlign: 'center',
-    marginTop: 20,
-    fontSize: 13,
-  },
-});

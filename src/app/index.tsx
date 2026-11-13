@@ -1,14 +1,14 @@
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect } from 'expo-router';
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSessionUIStore } from '@/store/sessionUI';
 
+/**
+ * Root index: auth/household gate only. Ledger UI lives under /(tabs).
+ */
 export default function Index() {
-  const router = useRouter();
   const authStatus = useSessionUIStore((s) => s.authStatus);
   const activeHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
-  const memberRole = useSessionUIStore((s) => s.memberRole);
-  const userEmail = useSessionUIStore((s) => s.userEmail);
 
   if (authStatus === 'UNAUTHENTICATED') {
     return <Redirect href="/(auth)/login" />;
@@ -23,30 +23,9 @@ export default function Index() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>No$otros</Text>
-      <Text style={styles.subtitle}>
-        Sessão ativa: {userEmail ?? ''} ({memberRole ?? 'MEMBRO'})
-      </Text>
-      {memberRole === 'FOUNDER' ? (
-        <Pressable
-          style={styles.inviteLink}
-          onPress={() => router.push('/(auth)/create-household')}
-        >
-          <Text style={styles.inviteLinkText}>
-            Gerenciar convite do casal (8 caracteres)
-          </Text>
-        </Pressable>
-      ) : null}
-      <Pressable
-        testID="open-ledger-tabs-button"
-        style={[styles.inviteLink, { marginTop: 12 }]}
-        onPress={() => router.push('/(tabs)/transactions')}
-      >
-        <Text style={styles.inviteLinkText}>
-          Abrir Contas, Categorias e Lançamentos
-        </Text>
-      </Pressable>
+    <View style={styles.container} testID="root-index-initializing">
+      <ActivityIndicator size="large" color="#4F46E5" />
+      <Text style={styles.subtitle}>Preparando sessão...</Text>
     </View>
   );
 }
@@ -59,28 +38,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 24,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginBottom: 8,
-  },
   subtitle: {
+    marginTop: 12,
     fontSize: 14,
     color: '#94A3B8',
-    marginBottom: 20,
-  },
-  inviteLink: {
-    backgroundColor: '#1E293B',
-    borderWidth: 1,
-    borderColor: '#4F46E5',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  inviteLinkText: {
-    color: '#818CF8',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });

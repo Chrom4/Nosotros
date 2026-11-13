@@ -1,0 +1,301 @@
+import { StyleSheet } from 'react-native';
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+    padding: 16,
+  },
+  headerCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 12,
+  },
+  summaryLabel: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  summaryValue: {
+    color: '#FB7185',
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  errorBanner: {
+    backgroundColor: '#3F1D2E',
+    borderColor: '#F43F5E',
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+  },
+  errorText: {
+    color: '#FDA4AF',
+    fontSize: 12,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  filterChip: {
+    backgroundColor: '#0F172A',
+    borderColor: '#334155',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  filterChipActive: {
+    backgroundColor: '#4F46E5',
+    borderColor: '#6366F1',
+  },
+  filterChipText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  listWrapper: {
+    flex: 1,
+  },
+  invoiceCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 10,
+  },
+  invoiceTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  invoiceInfo: {
+    flex: 1,
+  },
+  invoiceTitle: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  invoiceDates: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  invoiceRight: {
+    alignItems: 'flex-end',
+  },
+  statusBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 4,
+  },
+  badgeOpen: {
+    backgroundColor: '#1E3A8A',
+  },
+  badgeClosed: {
+    backgroundColor: '#78350F',
+  },
+  badgePaid: {
+    backgroundColor: '#064E3B',
+  },
+  statusBadgeText: {
+    color: '#F8FAFC',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  debtAmount: {
+    color: '#FDA4AF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  breakdownText: {
+    color: '#CBD5E1',
+    fontSize: 11,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  secondaryBtn: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#475569',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  secondaryBtnText: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  payBtn: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    paddingVertical: 7,
+    alignItems: 'center',
+  },
+  payBtnText: {
+    color: '#064E3B',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  txListSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  txSectionHeader: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  txRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#0F172A',
+  },
+  txRowLeft: {
+    flex: 1,
+  },
+  txRowDesc: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  txRowMeta: {
+    color: '#64748B',
+    fontSize: 11,
+  },
+  txRowRight: {
+    alignItems: 'flex-end',
+  },
+  txRowAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  chargeColor: {
+    color: '#FB7185',
+  },
+  creditColor: {
+    color: '#34D399',
+  },
+  editSliceLink: {
+    color: '#818CF8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  emptyText: {
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 20,
+    fontSize: 13,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.82)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#1E293B',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    color: '#F8FAFC',
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  closeText: {
+    color: '#94A3B8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  infoBanner: {
+    backgroundColor: '#0F172A',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 10,
+  },
+  infoBannerText: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  infoBannerSub: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 4,
+  },
+  label: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  input: {
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    color: '#F8FAFC',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  confirmPayBtn: {
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  confirmPayBtnText: {
+    color: '#064E3B',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+})

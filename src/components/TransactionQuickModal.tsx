@@ -1,8 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { BottomSheetModal } from './BottomSheetModal';
 import { CurrencyInput } from './CurrencyInput';
 import { DatePickerInput } from './DatePickerInput';
 import type { TransactionStatus } from '@/core';
@@ -26,12 +24,8 @@ import {
   resolveBaseTransactionContributionFlag,
   type TransactionRow,
 } from '@/data';
-import {
-  formatCentsToBrl,
-  parseCurrencyInputToCents,
-  useFiltersStore,
-  useSessionUIStore,
-} from '@/store';
+import { useFiltersStore, useSessionUIStore } from '@/store';
+import { todayLocalIso } from '@/utils/localDate';
 
 export interface TransactionQuickModalProps {
   visible?: boolean;
@@ -85,7 +79,33 @@ export function parseFriendlyDateToIso(
   return trimmed;
 }
 
-export function TransactionQuickModal({
+export function TransactionQuickModal(props: TransactionQuickModalProps) {
+  const storeVisible = useFiltersStore((s) => s.isQuickModalVisible);
+  const closeQuickModal = useFiltersStore((s) => s.closeQuickModal);
+  const isVisible = props.visible ?? storeVisible;
+  const handleClose = props.onClose ?? (() => closeQuickModal());
+
+  return (
+    <BottomSheetModal
+      visible={isVisible}
+      onClose={handleClose}
+      title="Novo Lançamento"
+      testID="transaction-quick-modal"
+      closeTestID="quick-modal-close-button"
+      showCloseButton
+    >
+      {isVisible ? (
+        <TransactionQuickModalBody
+          key="tx-quick-open"
+          {...props}
+          onClose={handleClose}
+        />
+      ) : null}
+    </BottomSheetModal>
+  );
+}
+
+function TransactionQuickModalBody({
   visible,
   onClose,
   onSuccess,
@@ -97,16 +117,13 @@ export function TransactionQuickModal({
   members,
   defaultDateIso,
 }: TransactionQuickModalProps) {
-  const storeVisible = useFiltersStore((s) => s.isQuickModalVisible);
   const storeInitialType = useFiltersStore((s) => s.quickModalInitialType);
   const competenceMonth = useFiltersStore((s) => s.competenceMonth);
-  const closeQuickModal = useFiltersStore((s) => s.closeQuickModal);
 
   const sessionHouseholdId = useSessionUIStore((s) => s.activeHouseholdId);
   const sessionUserId = useSessionUIStore((s) => s.userId);
   const sessionUserEmail = useSessionUIStore((s) => s.userEmail);
 
-  const isVisible = visible ?? storeVisible;
   const effectiveHouseholdId = propHouseholdId ?? sessionHouseholdId;
   const effectiveUserId =
     propCurrentUserId ?? sessionUserId ?? members[0]?.userId ?? null;
@@ -141,11 +158,7 @@ export function TransactionQuickModal({
 
   const [amountCents, setAmountCents] = useState(0);
   const [description, setDescription] = useState('');
-  const todayIso = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const yesterdayIso = useMemo(
-    () => new Date(Date.now() - 86400000).toISOString().slice(0, 10),
-    [],
-  );
+  const todayIso = todayLocalIso();
   const [transactionDate, setTransactionDate] = useState(
     defaultDateIso ??
       (todayIso.startsWith(competenceMonth)
@@ -162,6 +175,7 @@ export function TransactionQuickModal({
   const [manualContributionToggle, setManualContributionToggle] =
     useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
 
   const activeAccounts = useMemo(
     () => accounts.filter((a) => a.deletedAt === null && !a.isArchived),
@@ -247,11 +261,7 @@ export function TransactionQuickModal({
   const handleClose = () => {
     setErrorMessage(null);
     setSelectedType(null);
-    if (onClose) {
-      onClose();
-    } else {
-      closeQuickModal();
-    }
+    onClose?.();
   };
 
   const handleSelectType = (nextType: BaseTransactionType) => {
@@ -321,34 +331,11 @@ export function TransactionQuickModal({
   };
 
   return (
-    <Modal
-      visible={isVisible}
-      animationType="slide"
-      transparent
-      onRequestClose={handleClose}
-    >
-      <View style={styles.backdrop} testID="transaction-quick-modal">
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.keyboardContainer}
-        >
-          <View style={styles.sheet}>
-            <View style={styles.headerRow}>
-              <Text style={styles.title}>Novo Lançamento</Text>
-              <Pressable
-                testID="quick-modal-close-button"
-                onPress={handleClose}
-                style={styles.closeBtn}
-              >
-                <Text style={styles.closeBtnText}>Fechar</Text>
-              </Pressable>
-            </View>
-
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
               {errorMessage ? (
                 <View style={styles.errorBanner} testID="quick-modal-error">
                   <Text style={styles.errorText}>{errorMessage}</Text>
@@ -603,55 +590,13 @@ export function TransactionQuickModal({
             >
               <Text style={styles.submitButtonText}>Salvar Lançamento</Text>
             </Pressable>
-          </ScrollView>
-        </View>
-        </KeyboardAvoidingView>
-      </View>
-    </Modal>
+      </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  keyboardContainer: {
-    width: '100%',
-    maxHeight: '90%',
-  },
   scrollContent: {
-    paddingBottom: 40,
-  },
-  sheet: {
-    backgroundColor: '#1E293B',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '100%',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 19,
-    fontWeight: '700',
-    color: '#F8FAFC',
-  },
-  closeBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-  },
-  closeBtnText: {
-    color: '#94A3B8',
-    fontSize: 14,
-    fontWeight: '600',
+    paddingBottom: 24,
   },
   errorBanner: {
     backgroundColor: '#3F1D2E',

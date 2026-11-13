@@ -10,8 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { ensureLocalSessionReady } from '@/auth/localSession';
 import { acceptPartnerInviteCode } from '@/auth/onboardingService';
-import { getActiveDatabase, openEncryptedDatabase } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
 
 export default function AcceptInviteScreen() {
@@ -25,18 +25,14 @@ export default function AcceptInviteScreen() {
     setErrorMessage(null);
     setLoading(true);
     try {
-      try {
-        await openEncryptedDatabase();
-      } catch (dbErr) {
-        console.warn('Database open error during accept invite:', dbErr);
-      }
-      const targetDb = getActiveDatabase();
+      const { db: targetDb } = await ensureLocalSessionReady();
       await acceptPartnerInviteCode({
         inviteCode,
         displayName,
         db: targetDb,
       });
       void syncHouseholdMembers(targetDb);
+      await ensureLocalSessionReady();
       router.replace('/');
     } catch (err) {
       setErrorMessage(

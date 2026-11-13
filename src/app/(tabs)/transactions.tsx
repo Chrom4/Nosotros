@@ -8,15 +8,14 @@ import {
   matchesOwnershipFilter,
   type OwnershipFilter,
 } from '@/core';
-import { TransactionQuickModal } from '@/components/TransactionQuickModal';
 import {
   accounts,
   type AppDatabase,
   categories,
-  getActiveDatabase,
   householdMembers,
   softDeleteTransaction,
   transactions,
+  useActiveDatabase,
   useReactiveQuery,
 } from '@/data';
 import { syncHouseholdMembers } from '@/sync/membershipSync';
@@ -47,9 +46,11 @@ export default function TransactionsScreen({
   const setOwnershipFilter = useFiltersStore((s) => s.setOwnershipFilter);
   const openQuickModal = useFiltersStore((s) => s.openQuickModal);
 
-  const db = propDb ?? getActiveDatabase();
+  const db = useActiveDatabase(propDb);
   const householdId = propHouseholdId ?? sessionHouseholdId;
-  const currentUserId = propCurrentUserId ?? sessionUserId;
+  // Reserved for ownership filters / contribution UX in follow-ups.
+  const _currentUserId = propCurrentUserId ?? sessionUserId;
+  void _currentUserId;
 
   const { data: txRows } = useReactiveQuery(
     () =>
@@ -409,14 +410,6 @@ export default function TransactionsScreen({
         />
       </View>
 
-      <TransactionQuickModal
-        db={db}
-        householdId={householdId}
-        currentUserId={currentUserId}
-        accounts={accountRows}
-        categories={categoryRows}
-        members={effectiveMembers}
-      />
     </View>
   );
 }

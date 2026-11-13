@@ -3,6 +3,7 @@ import {
   BIOMETRIC_INACTIVITY_THRESHOLD_MS,
   useSessionUIStore,
 } from '@/store/sessionUI';
+import { getBiometricsEnabled } from './devicePreferences';
 
 export interface BiometricAdapter {
   hasHardwareAsync(): Promise<boolean>;
@@ -80,15 +81,24 @@ export async function promptBiometricUnlock(
  * Handles React Native `AppState` transitions according to DEC-03:
  * - Entering `background` or `inactive` records the timestamp (if not already recorded).
  * - Returning to `active` locks the app if elapsed inactivity >= threshold (default: 2 minutes).
+ * - No-op when the user disabled biometric lock in Settings.
  */
 export function handleAppStateTransition(
   nextAppState: string,
   nowMs: number = Date.now(),
   thresholdMs: number = BIOMETRIC_INACTIVITY_THRESHOLD_MS,
+  biometricsEnabled: boolean = true,
 ): boolean {
   const store = useSessionUIStore.getState();
 
   if (store.authStatus !== 'AUTHENTICATED') {
+    return false;
+  }
+
+  if (!biometricsEnabled) {
+    if (store.isBiometricLocked) {
+      store.unlockBiometrics();
+    }
     return false;
   }
 
@@ -104,4 +114,16 @@ export function handleAppStateTransition(
   }
 
   return store.isBiometricLocked;
+}
+
+/**
+ * Async AppState handler that respects the persisted DEC-03 preference.
+ */
+export async function handleAppStateTransitionAsync(
+  nextAppState: string,
+  nowMs: number = Date.now(),
+  thresholdMs: number = BIOMETRIC_INACTIVITY_THRESHOLD_MS,
+): Promise<boolean> {
+  const enabled = await getBiometricsEnabled();
+  return handleAppStateTransition(nextAppState, nowMs, thresholdMs, enabled);
 }

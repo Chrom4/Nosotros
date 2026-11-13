@@ -1,10 +1,13 @@
 /**
  * Production-safe structured logger for No$otros.
  * Complies with AGENTS.md Constitution:
- * Proibido registar payloads financeiros, chaves ou tokens em log em produção (__DEV__ === false).
+ * Never log financial payloads, keys, or tokens when `__DEV__ === false`.
  */
 
-const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
+const isDev =
+  typeof __DEV__ !== 'undefined'
+    ? __DEV__
+    : process.env.NODE_ENV !== 'production';
 
 export interface LogContext {
   [key: string]: unknown;
@@ -36,7 +39,11 @@ export function sanitizeContext(context?: LogContext): LogContext | undefined {
 
   for (const [k, v] of Object.entries(context)) {
     const lowerKey = k.toLowerCase();
-    if (SENSITIVE_KEYS.has(lowerKey) || lowerKey.includes('token') || lowerKey.includes('key')) {
+    if (
+      SENSITIVE_KEYS.has(lowerKey) ||
+      lowerKey.includes('token') ||
+      lowerKey.includes('key')
+    ) {
       sanitized[k] = '[REDACTED]';
     } else if (typeof v === 'object' && v !== null) {
       sanitized[k] = sanitizeContext(v as LogContext);
@@ -48,34 +55,35 @@ export function sanitizeContext(context?: LogContext): LogContext | undefined {
   return sanitized;
 }
 
+function emit(
+  level: 'debug' | 'info' | 'warn' | 'error',
+  message: string,
+  context?: LogContext,
+  error?: unknown,
+): void {
+  if (!isDev) {
+    return;
+  }
+  const safe = sanitizeContext(context);
+  const payload = error !== undefined ? { ...safe, error } : safe;
+  const sink = console[level].bind(console);
+  sink(`[nosotros:${level}] ${message}`, payload ?? '');
+}
+
 export const logger = {
   debug(message: string, context?: LogContext): void {
-    if (!isDev) return;
-    // Suppressed in production builds
-    void message;
-    void context;
+    emit('debug', message, context);
   },
 
   info(message: string, context?: LogContext): void {
-    if (!isDev) return;
-    void message;
-    void context;
+    emit('info', message, context);
   },
 
   warn(message: string, context?: LogContext): void {
-    if (!isDev) return;
-    // Safe dev warning
-    void message;
-    void context;
+    emit('warn', message, context);
   },
 
   error(message: string, error?: unknown, context?: LogContext): void {
-    if (!isDev) {
-      // In production, we never log raw objects or unscrubbed payloads
-      return;
-    }
-    void message;
-    void error;
-    void context;
+    emit('error', message, context, error);
   },
 };
